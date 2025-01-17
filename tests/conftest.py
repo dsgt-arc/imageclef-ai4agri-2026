@@ -1,4 +1,6 @@
-from my_task_package.spark import get_spark
+import pytest
+from my_task_package.spark import spark_resource
+
 
 @pytest.fixture(scope="session")
 def spark(tmp_path_factory):

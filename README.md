@@ -33,7 +33,7 @@ pip install -e .
 To run the package tests, use the `pytest` command.
 
 ```bash
-pytest tests/
+pytest -v tests/
 ```
 
 Add the pre-commit hooks to your repository to ensure that the code is formatted correctly and that the tests pass before committing.
