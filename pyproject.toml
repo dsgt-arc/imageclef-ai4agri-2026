@@ -1,5 +1,5 @@
 [project]
-name = "my-task-project"
+name = "ai4agri"
 version = "0.1.1"
 authors = [{ name = "Anthony Miyaguchi", email = "acmiyaguchi@gatech.edu" }]
 description = "DS@GT CLEF project template"
@@ -8,8 +8,8 @@ requires-python = ">=3.8"
 dynamic = ["dependencies"]
 
 [project.urls]
-Homepage = "https://github.com/dsgt-kaggle-clef/clef-project-template"
-Issues = "https://github.com/dsgt-kaggle-clef/clef-project-template/issues"
+Homepage = "https://github.com/dsgt-arc/imageclef-ai4agri-2026"
+Issues = "https://github.com/dsgt-arc/imageclef-ai4agri-2026/issues"
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -20,5 +20,5 @@ dependencies = { file = "requirements.txt" }
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["my_task_package*"]
+include = ["ai4agri*"]
 namespaces = false
