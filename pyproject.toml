@@ -1,7 +1,7 @@
 [project]
 name = "ai4agri"
 version = "0.1.1"
-authors = [{ name = "Anthony Miyaguchi", email = "acmiyaguchi@gatech.edu" }]
+authors = [{ name = "Hwaai Kang Kee", email = "hkee7@gatech.edu" }]
 description = "DS@GT CLEF project template"
 readme = "README.md"
 requires-python = ">=3.8"
