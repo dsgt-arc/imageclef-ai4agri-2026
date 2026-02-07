@@ -6,6 +6,7 @@ Index of external tools, libraries, datasets, and models used in this project.
 
 | Name | Category | Pipeline Stage | Status |
 |------|----------|---------------|--------|
+| [PACE Phoenix](pace-phoenix.md) | infrastructure | training, inference | active |
 | *(use `/docs:vendor` to add new entries)* | | | |
 
 ## Category Definitions

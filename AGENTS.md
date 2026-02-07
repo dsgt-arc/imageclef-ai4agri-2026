@@ -75,12 +75,13 @@ Experiments are tracked per-user in `user/<name>/experiments/`.
 
 ---
 
-# PACE Cluster
+# PACE Cluster (Phoenix)
 
-When running on the Georgia Tech PACE cluster:
+When running on the Georgia Tech PACE Phoenix cluster:
 
-1. **Environment variables**: Set `UV_PROJECT_ENVIRONMENT` to a path on scratch disk (not `$HOME`)
-2. **Scratch disk**: Use `/storage/ice-shared/dsgt/` or your personal scratch for data and checkpoints
-3. **venv location**: Always place `.venv` on scratch, not home directory (quota limited)
-4. **Downloads**: Cache HuggingFace models via `HF_HOME` and PyTorch via `TORCH_HOME` on scratch
-5. **Job scripts**: Use `uv run` inside sbatch scripts for reproducible environments
+1. **Login vs compute nodes**: Login nodes are only for requesting resources via `salloc`. Do all work on compute nodes.
+2. **Scratch disk**: Use `~/scratch` for data, checkpoints, and caches (home directory has limited quota)
+3. **Cache redirect**: Set `XDG_CACHE_HOME="$HOME/scratch/.cache"` in `~/.bashrc` to redirect all tool caches to scratch
+4. **venv location**: Prefer `$TMPDIR/.venv` on compute nodes for fast local SSD access (must reinstall each allocation). Alternatively use `~/scratch/.venv` for persistence.
+5. **Environment variable**: Set `UV_PROJECT_ENVIRONMENT` to your chosen `.venv` path before running `uv sync`
+6. **Job scripts**: Use `uv run` inside sbatch scripts for reproducible environments
