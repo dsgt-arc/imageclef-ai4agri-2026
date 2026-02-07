@@ -85,5 +85,5 @@ All templates are in [`_templates/`](_templates/). Use the corresponding slash c
 | [Getting Started](guides/getting-started.md) | Fork, setup, first experiment |
 | [Agent Tooling](guides/agent-tooling.md) | Skills, slash commands, and OpenSpec explained |
 | [Claude Commands](guides/claude-commands.md) | Slash command reference |
-| [OpenSpec](guides/openspec.md) | Spec-driven development workflow |
+| [OpenSpec](guides/openspec.md) | OPSX spec-driven development workflow |
 | [PACE Setup](guides/pace-setup.md) | PACE cluster environment setup |

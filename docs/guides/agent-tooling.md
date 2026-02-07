@@ -81,9 +81,10 @@ Slash commands are **Claude Code-specific** shortcuts. The user explicitly types
 | `/experiment:proposal` | Scaffold a new experiment | `user/<name>/experiments/NNN-name/` |
 | `/experiment:result` | Record experiment results | `user/<name>/experiments/NNN-name/results.md` |
 | `/experiment:validate` | Check experiment completeness | Validation report |
-| `/openspec:proposal` | Create a spec change proposal | `openspec/changes/<id>/` |
-| `/openspec:apply` | Implement an approved change | Code changes |
-| `/openspec:archive` | Archive a completed change | `openspec/changes/archive/` |
+| `/opsx:new` | Create a new change proposal | `openspec/changes/<name>/` |
+| `/opsx:ff` | Fast-forward all planning artifacts | All planning docs |
+| `/opsx:apply` | Implement approved tasks | Code changes |
+| `/opsx:archive` | Archive a completed change | `openspec/changes/archive/` |
 
 ### How They Work
 
@@ -113,7 +114,11 @@ The command becomes available as `/<category>:<filename>`.
 
 ## OpenSpec (Change Management)
 
-OpenSpec is a **spec-driven development workflow** for managing significant changes to the project. It's not about giving agents capabilities — it's about ensuring big decisions (architecture changes, new features, breaking changes) are proposed and reviewed before implementation.
+OpenSpec uses the **OPSX workflow** — a fluid, iterative approach to spec-driven development. It replaces the legacy phase-locked system with actions that can occur in any sequence. Use it to ensure big decisions (architecture changes, new features, breaking changes) are proposed and reviewed before implementation.
+
+### Setup
+
+After forking, run `openspec init` to generate OPSX commands in `.claude/commands/openspec/`. Configuration lives in `openspec/config.yaml`.
 
 ### When to Use OpenSpec
 
@@ -125,13 +130,14 @@ OpenSpec is a **spec-driven development workflow** for managing significant chan
 ### How It Works
 
 ```
-/openspec:proposal → Review → /openspec:apply → /openspec:archive
+/opsx:explore → /opsx:new → /opsx:continue or /opsx:ff → /opsx:apply → /opsx:archive
 ```
 
-1. **Propose**: Write a change proposal with rationale and approach
-2. **Review**: Team reviews and approves (or rejects)
-3. **Implement**: Apply the approved change
-4. **Archive**: Move completed changes to archive
+1. **Explore**: Investigate ideas before committing (`/opsx:explore`)
+2. **Create**: Initialize a change with proposal, specs, design, tasks (`/opsx:new` + `/opsx:ff`)
+3. **Implement**: Work through tasks (`/opsx:apply`)
+4. **Verify**: Validate implementation quality (`/opsx:verify`)
+5. **Archive**: Finalize and close out (`/opsx:archive`)
 
 See [OpenSpec Guide](openspec.md) for full details.
 

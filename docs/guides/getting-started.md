@@ -7,7 +7,7 @@ How to fork this template, set up your environment, and run your first experimen
 1. Fork this repository on GitHub
 2. Rename placeholders throughout:
    - `ruff.toml`: Update `known-first-party` to match your package name
-   - `openspec/project.md`: Fill in your project context
+   - `openspec/config.yaml`: Fill in your project context and tech stack
    - `README.md`: Update project title and description
 
 ## 2. Install uv
@@ -48,7 +48,18 @@ uv sync --package <experiment-name>
 
 The root `pyproject.toml` defines a uv workspace that auto-discovers all experiments under `user/*/experiments/*`.
 
-## 5. Install Pre-commit Hooks
+## 5. Initialize OpenSpec (optional)
+
+If you want to use spec-driven change management for architecture decisions:
+
+```bash
+npm install -g @fission-ai/openspec@latest
+openspec init
+```
+
+This generates OPSX commands (e.g., `/opsx:new`, `/opsx:apply`) in `.claude/commands/openspec/`.
+
+## 6. Install Pre-commit Hooks
 
 ```bash
 pre-commit install
@@ -56,7 +67,7 @@ pre-commit install
 
 This ensures code quality checks run automatically on every commit.
 
-## 6. Run Your First Experiment
+## 7. Run Your First Experiment
 
 Use Claude Code to create an experiment proposal:
 

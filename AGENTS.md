@@ -1,21 +1,17 @@
-<!-- OPENSPEC:START -->
-# OpenSpec Instructions
+# OpenSpec (OPSX Workflow)
 
-These instructions are for AI assistants working in this project.
+This project uses [OpenSpec](https://github.com/Fission-AI/OpenSpec) for spec-driven change management. The OPSX workflow replaces the legacy phase-locked approach with fluid, iterative actions.
 
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
+When a request involves architecture changes, new capabilities, breaking changes, or big decisions:
+1. Use `/opsx:explore` to investigate before committing
+2. Use `/opsx:new` or `/opsx:ff` to create a change proposal
+3. Use `/opsx:apply` to implement approved changes
+4. Use `/opsx:archive` to finalize completed work
 
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
+Configuration: `openspec/config.yaml`
+Changes: `openspec/changes/<name>/`
 
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
+See [OpenSpec Guide](docs/guides/openspec.md) for the full workflow.
 
 ---
 
