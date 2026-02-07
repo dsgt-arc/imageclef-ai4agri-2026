@@ -163,8 +163,12 @@ cython_debug/
 
 *.out
 
+# NFS lock files (PACE cluster)
+.nfs*
+
 # Artifacts (experiment outputs)
-artifacts/
+artifacts/*
+!artifacts/.gitkeep
 
 # uv
 .venv/
