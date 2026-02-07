@@ -15,15 +15,19 @@ Experiments follow a structured lifecycle: propose, approve, run, document resul
 ## Directory Structure
 
 ```
-user/<name>/experiments/NNN-descriptive-name/
-├── pyproject.toml   # Experiment dependencies (required)
-├── proposal.md      # Hypothesis and method (required)
-├── tasks.md         # Implementation checklist (required)
-├── design.md        # Technical decisions (optional)
-├── results.md       # Observations (added after completion)
-├── src/             # Experiment code (optional)
-└── artifacts/       # Logs, configs, figures, checkpoints
+user/<name>/
+├── src/                # Shared code across experiments (data loaders, models, utils)
+└── experiments/
+    └── NNN-descriptive-name/
+        ├── pyproject.toml   # Experiment dependencies (required)
+        ├── proposal.md      # Hypothesis and method (required)
+        ├── tasks.md         # Implementation checklist (required)
+        ├── design.md        # Technical decisions (optional)
+        ├── results.md       # Observations (added after completion)
+        └── artifacts/       # Logs, configs, figures, checkpoints
 ```
+
+**Note:** `src/` lives at the user level, not the experiment level. Experiments share common code (data loaders, training utilities, model definitions) through the user's `src/` package. Experiment directories contain only the experiment-specific configuration, proposals, and artifacts.
 
 ## Status Lifecycle
 

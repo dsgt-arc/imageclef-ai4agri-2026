@@ -25,7 +25,7 @@ user/<your-name>/
 │       ├── tasks.md        # Implementation checklist
 │       ├── results.md      # Observations (after completion)
 │       └── artifacts/      # Logs, configs, figures, checkpoints
-├── src/                # Personal code modules (optional)
+├── src/                # Shared code across experiments (data loaders, models, utils)
 ├── notebooks/          # Jupyter notebooks (optional)
 └── tests/              # Tests for personal code (optional)
 ```
