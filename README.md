@@ -11,6 +11,14 @@ Template repository for DS@GT ARC teams working on CLEF competitions. Fork this 
 | Vendor documentation | [docs/vendor/](docs/vendor/) |
 | Guides | [docs/guides/](docs/guides/) |
 
+## Guides
+
+- [Getting Started](docs/guides/getting-started.md) - Fork, setup, first experiment
+- [Agent Tooling](docs/guides/agent-tooling.md) - Skills, slash commands, and OpenSpec explained
+- [Claude Commands](docs/guides/claude-commands.md) - Slash command reference
+- [OpenSpec](docs/guides/openspec.md) - Spec-driven development workflow
+- [PACE Setup](docs/guides/pace-setup.md) - PACE cluster environment setup
+
 ## Repository Structure
 
 ```
@@ -127,14 +135,6 @@ Claude Code-specific shortcuts for explicit workflow triggers:
 ### OpenSpec (Change Management)
 
 Spec-driven development using the [OPSX workflow](https://github.com/Fission-AI/OpenSpec). Run `openspec init` after forking to generate skills and commands. See [OpenSpec Guide](docs/guides/openspec.md).
-
-## Guides
-
-- [Getting Started](docs/guides/getting-started.md) - Fork, setup, first experiment
-- [Agent Tooling](docs/guides/agent-tooling.md) - Skills, slash commands, and OpenSpec explained
-- [Claude Commands](docs/guides/claude-commands.md) - Slash command reference
-- [OpenSpec](docs/guides/openspec.md) - Spec-driven development workflow
-- [PACE Setup](docs/guides/pace-setup.md) - PACE cluster environment setup
 
 ## Contributing
 
