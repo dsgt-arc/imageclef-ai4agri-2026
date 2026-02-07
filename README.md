@@ -1,64 +1,121 @@
-# clef-project-template
+# CLEF Project Template
 
-This is a template repository for CLEF projects. It is meant to be forked and used as a starting point for new projects.
+Template repository for DS@GT ARC teams working on CLEF competitions. Fork this repo to get started with structured experiment tracking, Claude Code commands, OpenSpec spec-driven development, and PACE cluster tooling.
 
-## TODOS
+## Quick Start
 
-1. Fork this repository.
-2. Update the `my_task_package` directory with the name of your task package e.g. `birdclef` or `longeval`.
-3. Update the `pyproject.toml` file with the following elements:
-   1. `project:name` should be a hyphenated version of the task package
-   2. `project:authors` should be updated with the names of the team members
-   3. `project:urls` should be updated with the corresponding URLs for the project
-   4. `tools.setuptools.packages.find:include` should be updated with the directory name of the task package
-4. Update `user/my-username` and the corresponding `README.md` file with the username and a description of the user's directory.
+| Resource | Link |
+|----------|------|
+| Research concepts | [docs/concepts/](docs/concepts/) |
+| Literature references | [docs/references/](docs/references/) |
+| Vendor documentation | [docs/vendor/](docs/vendor/) |
+| Guides | [docs/guides/](docs/guides/) |
 
-## quickstart
+## Repository Structure
 
-Install the package into your environment.
-It is useful to install the package in editable mode so that you can make changes to the code and see the changes reflected in your environment.
-Use a virtual environment when possible to avoid conflicts with other packages.
+```
+clef-project-template/
+├── .claude/                    # Claude Code config & slash commands
+│   ├── settings.json
+│   └── commands/
+│       ├── docs/               # /docs:concept, /docs:reference, /docs:vendor
+│       ├── experiment/         # /experiment:proposal, /experiment:result, /experiment:validate
+│       └── openspec/           # /openspec:proposal, /openspec:apply, /openspec:archive
+├── docs/
+│   ├── README.md               # Documentation index
+│   ├── guides/                 # How-to documentation
+│   ├── _templates/             # Document templates (don't modify)
+│   ├── concepts/               # Research ideas
+│   ├── references/             # Papers and AI research outputs
+│   └── vendor/                 # External tool documentation
+├── openspec/
+│   ├── AGENTS.md               # OpenSpec workflow instructions
+│   ├── project.md              # Project context (fill in after forking)
+│   ├── specs/                  # Built specifications
+│   └── changes/                # Change proposals
+├── user/
+│   └── example/                # Example user workspace
+│       ├── pyproject.toml      # User-level dependencies
+│       └── experiments/
+│           └── 000-template/   # Template experiment
+├── vendor/                     # Vendored submodules / external repos
+├── AGENTS.md                   # AI assistant guidelines
+├── CLAUDE.md                   # Symlink → AGENTS.md
+├── ruff.toml                   # Ruff linter/formatter config
+├── .pre-commit-config.yaml     # Pre-commit hooks
+├── .gitignore
+└── LICENSE
+```
+
+## Setup
+
+### 1. Fork and Rename
+
+Fork this repository and update the placeholders:
+
+- `ruff.toml`: Change `known-first-party` to your package name
+- `openspec/project.md`: Fill in your project context
+- This `README.md`: Update title and description
+
+### 2. Install uv
 
 ```bash
-# create the virtual environment
-python -m venv .venv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# activate the virtual environment
+### 3. Create Your User Workspace
+
+```bash
+cp -r user/example user/<your-name>
+```
+
+Edit `user/<your-name>/pyproject.toml` with your name and dependencies, then:
+
+```bash
+# Create virtual environment
+uv venv .venv
+
+# Activate it
 source .venv/bin/activate
 
-# install the package in editable mode
-pip install -e .
+# Install dependencies from your workspace
+uv sync --package user-<your-name>
 ```
 
-To run the package tests, use the `pytest` command.
-
-```bash
-pytest -v tests/
-```
-
-Add the pre-commit hooks to your repository to ensure that the code is formatted correctly and that the tests pass before committing.
+### 4. Install Pre-commit Hooks
 
 ```bash
 pre-commit install
 ```
 
-## structure
+## Using Claude Code
 
-The repository structure is as follows:
+This template includes slash commands for structured research workflows:
 
-```
-root/
-├── my_task_package/  # the task package for the project
-├── tests/            # tests for the project
-├── notebooks/        # notebooks for the project
-├── user/             # user-specific directories
-├── scripts/          # scripts for the project
-└── docs/             # documentation for the project
-```
+| Command | Purpose |
+|---------|---------|
+| `/docs:concept` | Create a research concept document |
+| `/docs:reference` | Capture knowledge from papers/articles |
+| `/docs:vendor` | Document an external tool or dataset |
+| `/experiment:proposal` | Propose a new experiment |
+| `/experiment:result` | Record experiment results |
+| `/experiment:validate` | Validate experiment structure |
+| `/openspec:proposal` | Create a spec change proposal |
+| `/openspec:apply` | Implement an approved change |
+| `/openspec:archive` | Archive a completed change |
 
-The `my_task_package` directory should contain the main code for the project, organized into modules and submodules as needed.
-The `tests` directory should contain the tests for the project, organized into test modules that correspond to the code modules.
-The `notebooks` directory should contain Jupyter notebooks that capture exploration of the datasets and modeling.
-The `user` directory is a scratch directory where users can commit files without worrying about polluting the main repository.
-The `scripts` directory should contain scripts that are used in the project, such as utility scripts for working with PACE or GCP.
-The `docs` directory should contain documentation for the project, including explanations of the code, the data, and the models.
+See [docs/guides/claude-commands.md](docs/guides/claude-commands.md) for details.
+
+## Guides
+
+- [Getting Started](docs/guides/getting-started.md) - Fork, setup, first experiment
+- [Claude Commands](docs/guides/claude-commands.md) - Slash command reference
+- [OpenSpec](docs/guides/openspec.md) - Spec-driven development workflow
+- [PACE Setup](docs/guides/pace-setup.md) - PACE cluster environment setup
+
+## Contributing
+
+1. Create your user workspace under `user/<your-name>/`
+2. Use slash commands to create structured documents
+3. Follow the research workflow: Reference → Concept → Experiment → Results
+4. See [AGENTS.md](AGENTS.md) for AI assistant conventions

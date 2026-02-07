@@ -162,3 +162,13 @@ cython_debug/
 #.idea/
 
 *.out
+
+# Artifacts (experiment outputs)
+artifacts/
+
+# uv
+.venv/
+uv.lock
+
+# Vendor submodules (tracked separately)
+vendor/*/
