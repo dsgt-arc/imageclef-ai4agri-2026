@@ -35,10 +35,11 @@ clef-project-template/
 │   └── changes/                # Change proposals
 ├── user/
 │   └── example/                # Example user workspace
-│       ├── pyproject.toml      # User-level dependencies
 │       └── experiments/
 │           └── 000-template/   # Template experiment
+│               └── pyproject.toml  # Experiment-level dependencies
 ├── vendor/                     # Vendored submodules / external repos
+├── pyproject.toml              # Workspace root (discovers experiments)
 ├── AGENTS.md                   # AI assistant guidelines
 ├── CLAUDE.md                   # Symlink → AGENTS.md
 ├── ruff.toml                   # Ruff linter/formatter config
@@ -69,7 +70,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 cp -r user/example user/<your-name>
 ```
 
-Edit `user/<your-name>/pyproject.toml` with your name and dependencies, then:
+Edit the `pyproject.toml` inside your first experiment (e.g., `user/<your-name>/experiments/001-my-experiment/pyproject.toml`) with your name and dependencies, then:
 
 ```bash
 # Create virtual environment
@@ -78,8 +79,8 @@ uv venv .venv
 # Activate it
 source .venv/bin/activate
 
-# Install dependencies from your workspace
-uv sync --package user-<your-name>
+# Install experiment dependencies
+uv sync --package <experiment-name>
 ```
 
 ### 4. Install Pre-commit Hooks

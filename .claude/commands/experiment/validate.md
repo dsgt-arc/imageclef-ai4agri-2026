@@ -20,6 +20,7 @@ If no experiment-id provided, list available experiments for selection.
 **Validation Checks**
 
 1. **Structure** (required files):
+   - [ ] `pyproject.toml` exists
    - [ ] `proposal.md` exists
    - [ ] `tasks.md` exists
    - [ ] `artifacts/` directory exists
@@ -82,6 +83,7 @@ If no experiment-id provided, list available experiments for selection.
 Validating: 001-encoder-benchmark
 
 Structure:
+  ✓ pyproject.toml
   ✓ proposal.md
   ✓ tasks.md
   ✓ artifacts/

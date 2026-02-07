@@ -1,7 +1,7 @@
 [project]
-name = "user-example"
+name = "000-template"
 version = "0.1.0"
-description = "Example user workspace"
+description = "Template experiment — copy this to start a new experiment"
 authors = [
     { name = "Your Name", email = "you@gatech.edu" },
 ]
@@ -14,13 +14,13 @@ dependencies = [
     # "transformers>=4.30.0",
 
     # Data handling
-    "numpy>=1.24.0",
-    "pandas>=2.0.0",
-    "scikit-learn>=1.3.0",
+    # "numpy>=1.24.0",
+    # "pandas>=2.0.0",
+    # "scikit-learn>=1.3.0",
 
     # Utilities
-    "tqdm>=4.65.0",
-    "matplotlib>=3.7.0",
+    # "tqdm>=4.65.0",
+    # "matplotlib>=3.7.0",
 ]
 
 [project.optional-dependencies]

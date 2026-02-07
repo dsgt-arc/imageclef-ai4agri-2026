@@ -31,7 +31,13 @@ Create an experiment to test a hypothesis from a concept. Experiments have two p
    mkdir -p user/<name>/experiments/NNN-descriptive-name/artifacts
    ```
 
-3. Create `proposal.md` using `docs/_templates/experiment-proposal.md`:
+3. Create `pyproject.toml` for the experiment:
+   - Copy from `user/example/experiments/000-template/pyproject.toml`
+   - Update `name` to match the experiment directory name (e.g., `NNN-descriptive-name`)
+   - Update `description` and `authors`
+   - Add experiment-specific dependencies
+
+4. Create `proposal.md` using `docs/_templates/experiment-proposal.md`:
    - Set Status to `proposed`
    - Write a specific, falsifiable Hypothesis
    - Add Background linking to the motivating concept
@@ -46,25 +52,25 @@ Create an experiment to test a hypothesis from a concept. Experiments have two p
      - Success Criteria (confirm if / reject if)
    - Note Limitations and assumptions
 
-4. Create `tasks.md` using `docs/_templates/experiment-tasks.md`:
+5. Create `tasks.md` using `docs/_templates/experiment-tasks.md`:
    - Break down the experiment into actionable steps
    - Group by phase: Setup, Implementation, Execution, Analysis
    - Use checkbox format: `- [ ] 1.1 Task description`
 
-5. (Optional) Create `design.md` using `docs/_templates/experiment-design.md` if:
+6. (Optional) Create `design.md` using `docs/_templates/experiment-design.md` if:
    - Multiple implementation approaches need documentation
    - Architecture decisions should be captured
    - Non-trivial technical setup is required
 
-6. Get approval before running (change Status to `approved`).
+7. Get approval before running (change Status to `approved`).
 
-7. Update Status to `in-progress` when starting execution.
+8. Update Status to `in-progress` when starting execution.
 
-8. Track progress by checking off tasks in `tasks.md`.
+9. Track progress by checking off tasks in `tasks.md`.
 
-9. After completion, use `/experiment:result` to add results.
+10. After completion, use `/experiment:result` to add results.
 
-10. Use `/experiment:validate` to check completeness before approval.
+11. Use `/experiment:validate` to check completeness before approval.
 
 **Templates**
 
@@ -85,6 +91,7 @@ proposed → approved → in-progress → completed
 
 ```
 user/<name>/experiments/NNN-descriptive-name/
+├── pyproject.toml   # Experiment dependencies (required)
 ├── proposal.md      # Hypothesis and method (required)
 ├── tasks.md         # Implementation checklist (required)
 ├── design.md        # Technical decisions (optional)

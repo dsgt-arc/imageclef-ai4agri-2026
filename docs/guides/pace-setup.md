@@ -101,7 +101,7 @@ cd ~/clef/<your-project>
 
 # Create venv and install dependencies (fast with uv)
 uv venv ${TMPDIR}/.venv
-uv sync --package user-<your-name>
+uv sync --package <experiment-name>
 ```
 
 Add this to your workflow: every time you SSH into a new compute node, run the above before starting work. With uv's speed and cached packages on scratch (`XDG_CACHE_HOME`), this typically takes seconds.
@@ -119,7 +119,7 @@ cd ~/clef/<your-project>
 
 # Create venv and install dependencies (one-time)
 uv venv $HOME/scratch/.venv
-uv sync --package user-<your-name>
+uv sync --package <experiment-name>
 ```
 
 ### Quick Comparison
@@ -165,7 +165,7 @@ export XDG_CACHE_HOME=$HOME/scratch/.cache
 # Navigate to project and install dependencies
 cd ~/clef/<your-project>
 uv venv ${TMPDIR}/.venv
-uv sync --package user-<your-name>
+uv sync --package <experiment-name>
 
 # Run experiment
 uv run python -m my_module.train --config config.yaml

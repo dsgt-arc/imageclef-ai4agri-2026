@@ -1,0 +1,15 @@
+# This is the workspace root — do NOT add dependencies here.
+# Each experiment has its own pyproject.toml under user/<name>/experiments/<id>/.
+#
+# This file lets uv discover experiment packages so you can run:
+#   uv sync --package <experiment-name>
+# from anywhere in the repo. Alternatively, cd into the experiment
+# directory and run `uv sync` directly.
+
+[project]
+name = "clef-project-template"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.uv.workspace]
+members = ["user/*/experiments/*"]

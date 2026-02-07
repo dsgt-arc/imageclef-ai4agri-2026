@@ -24,17 +24,14 @@ brew install uv
 
 ## 3. Create Your User Workspace
 
-Each team member has their own workspace with its own `pyproject.toml` for dependencies:
+Each team member has their own workspace under `user/<name>/`:
 
 ```bash
 # Copy the example workspace
 cp -r user/example user/<your-name>
 ```
 
-Edit `user/<your-name>/pyproject.toml`:
-- Update `name` to `user-<your-name>`
-- Update `authors` with your info
-- Add the dependencies your experiments need
+Each experiment within your workspace has its own `pyproject.toml` for dependencies. This gives better isolation — different experiments can use different library versions.
 
 ## 4. Set Up Your Environment
 
@@ -45,9 +42,11 @@ uv venv .venv
 # Activate it
 source .venv/bin/activate
 
-# Install your workspace dependencies
-uv sync --package user-<your-name>
+# Install dependencies for a specific experiment
+uv sync --package <experiment-name>
 ```
+
+The root `pyproject.toml` defines a uv workspace that auto-discovers all experiments under `user/*/experiments/*`.
 
 ## 5. Install Pre-commit Hooks
 

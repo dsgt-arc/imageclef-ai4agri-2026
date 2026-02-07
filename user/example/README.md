@@ -17,28 +17,30 @@ Each team member gets their own workspace under `user/<name>/`. This is where yo
 
 ```
 user/<your-name>/
-├── pyproject.toml      # Your dependencies (required)
 ├── README.md           # Workspace overview (this file)
 ├── experiments/        # Experiment proposals and results
 │   └── NNN-name/       # Each experiment gets a numbered directory
-│       ├── proposal.md # Hypothesis and method
-│       ├── tasks.md    # Implementation checklist
-│       ├── results.md  # Observations (after completion)
-│       └── artifacts/  # Logs, configs, figures, checkpoints
+│       ├── pyproject.toml  # Experiment dependencies
+│       ├── proposal.md     # Hypothesis and method
+│       ├── tasks.md        # Implementation checklist
+│       ├── results.md      # Observations (after completion)
+│       └── artifacts/      # Logs, configs, figures, checkpoints
 ├── src/                # Personal code modules (optional)
 ├── notebooks/          # Jupyter notebooks (optional)
 └── tests/              # Tests for personal code (optional)
 ```
 
-## Your pyproject.toml
+## Per-Experiment Dependencies
 
-Each user workspace has its own `pyproject.toml` with experiment-specific dependencies. This example includes a starter one — edit it to add the packages you need.
+Each experiment has its own `pyproject.toml` declaring its specific dependencies. This gives better isolation — different experiments can use different library versions without conflict.
 
-After copying this workspace, install your dependencies:
+Install an experiment's dependencies:
 
 ```bash
-uv sync --package user-<your-name>
+uv sync --package <experiment-name>
 ```
+
+The root `pyproject.toml` defines a uv workspace that auto-discovers all experiments under `user/*/experiments/*`.
 
 ## Experiment Numbering
 
