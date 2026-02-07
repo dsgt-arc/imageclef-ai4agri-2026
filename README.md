@@ -1,6 +1,6 @@
 # CLEF Project Template
 
-Template repository for DS@GT ARC teams working on CLEF competitions. Fork this repo to get started with structured experiment tracking, Claude Code commands, OpenSpec spec-driven development, and PACE cluster tooling.
+Template repository for DS@GT ARC teams working on CLEF competitions. Fork this repo to get started with structured experiment tracking, agent skills, slash commands, OpenSpec spec-driven development, and PACE cluster tooling.
 
 ## Quick Start
 
@@ -15,6 +15,10 @@ Template repository for DS@GT ARC teams working on CLEF competitions. Fork this 
 
 ```
 clef-project-template/
+├── skills/                     # Agent Skills (auto-discovered by compatible agents)
+│   ├── pace-cluster/           # PACE Phoenix cluster operations
+│   ├── experiment/             # Experiment lifecycle management
+│   └── research-docs/          # Research documentation workflow
 ├── .claude/                    # Claude Code config & slash commands
 │   ├── settings.json
 │   └── commands/
@@ -89,9 +93,23 @@ uv sync --package <experiment-name>
 pre-commit install
 ```
 
-## Using Claude Code
+## Agent Tooling
 
-This template includes slash commands for structured research workflows:
+This template uses three systems for AI-assisted workflows. See [Agent Tooling Guide](docs/guides/agent-tooling.md) for full details.
+
+### Skills (Auto-Activated)
+
+[Agent Skills](https://agentskills.io) are auto-discovered by compatible agents (Claude Code, Cursor, Gemini CLI, etc.). Just describe what you need and the agent loads the right skill.
+
+| Skill | Activates when you... |
+|-------|----------------------|
+| `pace-cluster` | Ask about PACE, Slurm, GPUs, job scripts |
+| `experiment` | Want to create, run, or document experiments |
+| `research-docs` | Want to capture concepts, papers, or tools |
+
+### Slash Commands (User-Invoked)
+
+Claude Code-specific shortcuts for explicit workflow triggers:
 
 | Command | Purpose |
 |---------|---------|
@@ -105,11 +123,14 @@ This template includes slash commands for structured research workflows:
 | `/openspec:apply` | Implement an approved change |
 | `/openspec:archive` | Archive a completed change |
 
-See [docs/guides/claude-commands.md](docs/guides/claude-commands.md) for details.
+### OpenSpec (Change Management)
+
+Spec-driven development for architecture changes and big decisions. See [OpenSpec Guide](docs/guides/openspec.md).
 
 ## Guides
 
 - [Getting Started](docs/guides/getting-started.md) - Fork, setup, first experiment
+- [Agent Tooling](docs/guides/agent-tooling.md) - Skills, slash commands, and OpenSpec explained
 - [Claude Commands](docs/guides/claude-commands.md) - Slash command reference
 - [OpenSpec](docs/guides/openspec.md) - Spec-driven development workflow
 - [PACE Setup](docs/guides/pace-setup.md) - PACE cluster environment setup

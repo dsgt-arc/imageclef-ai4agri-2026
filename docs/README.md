@@ -27,6 +27,7 @@ docs/
 │   └── README.md       # Index of vendored repos
 ├── guides/             # How-to documentation
 │   ├── getting-started.md
+│   ├── agent-tooling.md
 │   ├── claude-commands.md
 │   ├── openspec.md
 │   └── pace-setup.md
@@ -82,6 +83,7 @@ All templates are in [`_templates/`](_templates/). Use the corresponding slash c
 | Guide | Description |
 |-------|-------------|
 | [Getting Started](guides/getting-started.md) | Fork, setup, first experiment |
+| [Agent Tooling](guides/agent-tooling.md) | Skills, slash commands, and OpenSpec explained |
 | [Claude Commands](guides/claude-commands.md) | Slash command reference |
 | [OpenSpec](guides/openspec.md) | Spec-driven development workflow |
 | [PACE Setup](guides/pace-setup.md) | PACE cluster environment setup |
