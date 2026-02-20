@@ -1,24 +1,15 @@
+# This is the workspace root — do NOT add dependencies here.
+# Each experiment has its own pyproject.toml under user/<name>/experiments/<id>/.
+#
+# This file lets uv discover experiment packages so you can run:
+#   uv sync --package <experiment-name>
+# from anywhere in the repo. Alternatively, cd into the experiment
+# directory and run `uv sync` directly.
+
 [project]
-name = "ai4agri"
-version = "0.1.1"
-authors = [{ name = "Hwaai Kang Kee", email = "hkee7@gatech.edu" }, { name = "Ignacio Perez" }]
-description = "DS@GT CLEF project template"
-readme = "README.md"
-requires-python = ">=3.8"
-dynamic = ["dependencies"]
+name = "clef-project-template"
+version = "0.1.0"
+requires-python = ">=3.10"
 
-[project.urls]
-Homepage = "https://github.com/dsgt-arc/imageclef-ai4agri-2026"
-Issues = "https://github.com/dsgt-arc/imageclef-ai4agri-2026/issues"
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.dynamic]
-dependencies = { file = "requirements.txt" }
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["ai4agri*"]
-namespaces = false
+[tool.uv.workspace]
+members = ["user/*/experiments/*"]

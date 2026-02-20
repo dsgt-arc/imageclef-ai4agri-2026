@@ -1,0 +1,23 @@
+# OpenSpec project configuration
+# See: https://github.com/Fission-AI/OpenSpec/blob/main/docs/opsx.md
+
+schema: spec-driven
+
+context: |
+  This is a CLEF competition project.
+  Update this section with your team's tech stack, conventions, and constraints.
+  Example:
+    Tech stack: Python, PyTorch, uv
+    Compute: Georgia Tech PACE Phoenix cluster (Slurm)
+    Experiments: Per-user workspaces under user/<name>/experiments/
+    Testing: pytest
+
+# Per-artifact rules (optional)
+# rules:
+#   proposal:
+#     - Include compute requirements estimate
+#     - Identify affected experiments
+#   specs:
+#     - Use Given/When/Then format for scenarios
+#   design:
+#     - Reference relevant vendor documentation
