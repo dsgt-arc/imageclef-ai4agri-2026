@@ -1,5 +1,5 @@
 [project]
-name = "001-template"
+name = "001-eda"
 version = "0.1.0"
 description = "EDA for dataset"
 authors = [
