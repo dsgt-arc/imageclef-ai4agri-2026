@@ -22,7 +22,7 @@ ignore = [
 ]
 
 [lint.isort]
-known-first-party = ["my_clef_project"]
+known-first-party = ["imageclef-ai4agri-2026"]
 
 [format]
 quote-style = "double"
