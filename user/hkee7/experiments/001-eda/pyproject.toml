@@ -22,6 +22,7 @@ dependencies = [
     # Utilities
     "tqdm>=4.65.0",
     "matplotlib>=3.7.0",
+    "pre-commit>=4.5.1",
 ]
 
 [project.optional-dependencies]
