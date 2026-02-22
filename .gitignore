@@ -165,3 +165,17 @@ cython_debug/
 #.idea/
 
 *.out
+
+# NFS lock files (PACE cluster)
+.nfs*
+
+# Artifacts (experiment outputs)
+artifacts/*
+!artifacts/.gitkeep
+
+# uv
+.venv/
+uv.lock
+
+# Vendor submodules (tracked separately)
+vendor/*/
