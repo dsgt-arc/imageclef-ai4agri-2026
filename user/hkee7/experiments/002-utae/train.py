@@ -163,7 +163,7 @@ def main(cfg: Config):
     # ---- Model / optim / loss -----------------------------------------------
     model = build_model(cfg).to(cfg.device)
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model: {cfg.mode} mode, {param_count/1e6:.1f}M params")
+    print(f"Model: {param_count/1e6:.1f}M params")
 
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
@@ -230,7 +230,6 @@ def main(cfg: Config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train U-TAE on AgriPotential")
     parser.add_argument("--data-path", type=str)
-    parser.add_argument("--mode", choices=["regression", "classification"])
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--lr", type=float)

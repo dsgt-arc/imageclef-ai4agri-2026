@@ -12,7 +12,6 @@ class Config:
     # ---- Data ---------------------------------------------------------------
     data_path: str = "data/precomputed_tensors"
     metadata_path: str = "data/agripotential/metadata.csv"
-    mode: str | None = None
     num_bands: int = 10
 
     # ---- Model --------------------------------------------------------------
