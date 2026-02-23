@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=002-utae
 #SBATCH --account=paceship-clef2026_img_ai4agri
-#SBATCH --partition=gpu
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
