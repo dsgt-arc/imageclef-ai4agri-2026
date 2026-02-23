@@ -43,7 +43,7 @@ class UTAEDataset(Dataset):
         self.index: list[tuple[str, int]] = []
         for f in chunk_files:
             path = os.path.join(self.chunk_dir, f)
-            n = torch.load(path, weights_only=True)["data"].shape[0]
+            n = torch.load(path, weights_only=True, mmap=True)["data"].shape[0]
             self.index.extend((f, i) for i in range(n))
 
         meta = pl.read_csv(metadata_path)
