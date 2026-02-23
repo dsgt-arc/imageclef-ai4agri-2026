@@ -135,13 +135,7 @@ class SpectralViTPixel(nn.Module):
         self.patch_size = patch_size
         H = W = patch_size
         # 1. Embed each spectral band
-        self.pixel_embed = nn.Sequential(
-            nn.Conv1d(1, 16, kernel_size=5, padding=2),
-            nn.GELU(),
-            nn.Flatten(),
-            nn.Linear(16 * num_bands, d_model)
-        )   
-
+        self.pixel_embed = nn.Linear(num_bands, d_model)
 
         # 2D positional embeddings
         self.row_embed = nn.Parameter(torch.randn(H, d_model)) 
