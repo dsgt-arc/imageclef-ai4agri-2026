@@ -16,7 +16,7 @@ export UV_PROJECT_ENVIRONMENT=$HOME/scratch/.venv
 export XDG_CACHE_HOME=$HOME/scratch/.cache
 
 # Navigate to project and install dependencies
-cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026
+cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv venv $HOME/scratch/.venv
 uv sync --package 002-utae
 
