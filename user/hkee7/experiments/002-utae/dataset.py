@@ -14,7 +14,7 @@ import polars as pl
 import torch
 from torch.utils.data import IterableDataset
 
-from ai4agri.utils.stream_chunk_dataset import StreamingChunkDataset
+from stream_chunk_dataset import StreamingChunkDataset
 
 # Sentinel-2 L2A reflectance is stored as integers in [0, 10000]
 REFLECTANCE_SCALE = 10_000.0
