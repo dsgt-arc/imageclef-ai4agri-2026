@@ -151,12 +151,16 @@ def main(cfg: Config):
         sampler=ChunkAwareSampler(train_ds, shuffle=True, seed=cfg.seed),
         num_workers=cfg.num_workers,
         pin_memory=cfg.pin_memory,
+        persistent_workers=True,
+        prefetch_factor=4,
         drop_last=True,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
+        persistent_workers=True,
+        prefetch_factor=4,
         pin_memory=cfg.pin_memory,
     )
 
