@@ -1,28 +1,25 @@
 """
-PyTorch Dataset adapter for AgriPotential → U-TAE training.
+PyTorch Dataset for AgriPotential → U-TAE training.
 
-Wraps the shared PotentialDataset and applies normalization.
-Also supports the precomputed StreamingChunkDataset for faster I/O.
+Reads precomputed .pt chunk files directly — no external dependencies.
 """
 
 from __future__ import annotations
 
+import os
 from typing import Literal
 
 import numpy as np
 import polars as pl
 import torch
-from torch.utils.data import IterableDataset
+from torch.utils.data import Dataset, Sampler
 
-from stream_chunk_dataset import StreamingChunkDataset
-
-# Sentinel-2 L2A reflectance is stored as integers in [0, 10000]
 REFLECTANCE_SCALE = 10_000.0
 
 
-class UTAEDataset(IterableDataset):
+class UTAEDataset(Dataset):
     """
-    Map-style dataset that wraps ``StreamChunkDataset`` for U-TAE training.
+    Map-style dataset over precomputed AgriPotential chunks.
 
     Returns
     -------
@@ -32,41 +29,77 @@ class UTAEDataset(IterableDataset):
         Pixel labels 0–5 (0 = unlabelled, 1–5 = potential classes).
     positions : Tensor[long] — (T,)
         Days since first acquisition (used by LTAE positional encoding).
-        The 34 timesteps span 2017–2019, so day-of-year would wrap and
-        collide across years. Absolute day offset preserves full ordering.
     """
 
     def __init__(
         self,
         mode: Literal["train", "val", "test"],
-        data_path: str | None = "data/precomputed_tensors",
-        metadata_path: str | None = "data/agripotential/metadata.csv",
-        shuffle: bool = True,
-        seed: int = 42,
+        chunk_dir: str = "data/precomputed_tensors",
+        metadata_path: str = "data/agripotential/metadata.csv",
     ):
-        self.base = StreamingChunkDataset(
-            mode=mode, chunk_dir=data_path, shuffle=shuffle, seed=seed
-        )
+        self.chunk_dir = os.path.join(chunk_dir, mode)
+        chunk_files = sorted(f for f in os.listdir(self.chunk_dir) if f.endswith(".pt"))
 
-        # ---- Temporal positions from metadata --------------------------------
-        # metadata.csv has columns: filename, day, month, year
-        # The 34 images span 2017–2019, so we use days since the first
-        # acquisition to preserve full temporal ordering across years
-        metadata_df = pl.read_csv(metadata_path)
-        self.time_offsets = torch.from_numpy(_parse_positions(metadata_df))
+        self.index: list[tuple[str, int]] = []
+        for f in chunk_files:
+            path = os.path.join(self.chunk_dir, f)
+            n = torch.load(path, weights_only=True)["data"].shape[0]
+            self.index.extend((f, i) for i in range(n))
+
+        meta = pl.read_csv(metadata_path)
+        self.time_offsets = torch.from_numpy(_parse_positions(meta))
+
+        self._cache_file: str | None = None
+        self._cache_data = None
+        self._cache_label = None
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        f, patch_idx = self.index[idx]
+        if f != self._cache_file:
+            payload = torch.load(os.path.join(self.chunk_dir, f), weights_only=True)
+            self._cache_file = f
+            self._cache_data = payload["data"]
+            self._cache_label = payload["label"]
+
+        data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE
+        data = data.clamp(0.0, 1.0)
+        label = self._cache_label[patch_idx]
+        return data, label, self.time_offsets
+
+
+class ChunkAwareSampler(Sampler):
+    """Yields indices grouped by chunk to keep the per-worker cache warm."""
+
+    def __init__(self, dataset: UTAEDataset, shuffle: bool = True, seed: int = 42):
+        self.shuffle = shuffle
+        self.rng = torch.Generator().manual_seed(seed)
+
+        chunks: dict[str, list[int]] = {}
+        for i, (f, _) in enumerate(dataset.index):
+            chunks.setdefault(f, []).append(i)
+        self.chunks = list(chunks.values())
 
     def __iter__(self):
-        for data, label in self.base:
-            data = (data / REFLECTANCE_SCALE).clamp(0.0, 1.0)
-            yield data, label, self.time_offsets
+        chunk_order = list(range(len(self.chunks)))
+        if self.shuffle:
+            chunk_order = torch.randperm(len(self.chunks), generator=self.rng).tolist()
+
+        for ci in chunk_order:
+            indices = self.chunks[ci]
+            if self.shuffle:
+                perm = torch.randperm(len(indices), generator=self.rng).tolist()
+                indices = [indices[j] for j in perm]
+            yield from indices
+
+    def __len__(self):
+        return sum(len(c) for c in self.chunks)
 
 
 def _parse_positions(meta: pl.DataFrame) -> np.ndarray:
-    """Compute days since first acquisition from metadata.
-
-    Uses the (year, month, day) columns in metadata.csv.
-    Falls back to sequential indices.
-    """
+    """Compute days since first acquisition from metadata."""
     dates = meta.select(
         pl.date(
             pl.col("year").cast(pl.Int32),

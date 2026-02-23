@@ -15,21 +15,15 @@ import time
 import torch
 import torch.nn as nn
 from config import Config
-from dataset import UTAEDataset
+from dataset import ChunkAwareSampler, UTAEDataset
 from metrics import exact_accuracy, mae, pm1_accuracy
 from model import UTAERegression
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from torch.utils.data import DataLoader
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def collate_fn(batch):
-    """Stack (data, label, doy) tuples into batched tensors."""
-    data, labels, doys = zip(*batch, strict=False)
-    return torch.stack(data), torch.stack(labels), torch.stack(doys)
 
 
 def build_model(cfg: Config) -> nn.Module:
@@ -149,12 +143,14 @@ def main(cfg: Config):
     train_ds = UTAEDataset("train", cfg.data_path, cfg.metadata_path)
     val_ds = UTAEDataset("val", cfg.data_path, cfg.metadata_path)
 
+    print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
+
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg.batch_size,
+        sampler=ChunkAwareSampler(train_ds, shuffle=True, seed=cfg.seed),
         num_workers=cfg.num_workers,
         pin_memory=cfg.pin_memory,
-        collate_fn=collate_fn,
         drop_last=True,
     )
     val_loader = DataLoader(
@@ -162,7 +158,6 @@ def main(cfg: Config):
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
         pin_memory=cfg.pin_memory,
-        collate_fn=collate_fn,
     )
 
     # ---- Model / optim / loss -----------------------------------------------
