@@ -9,7 +9,7 @@
 #SBATCH --qos=embers
 #SBATCH --output=artifacts/slurm-%j.out
 
-module load
+module load pytorch/2.1.0
 
 # Environment setup — use TMPDIR for fast venv
 export UV_PROJECT_ENVIRONMENT=$HOME/scratch/.venv
