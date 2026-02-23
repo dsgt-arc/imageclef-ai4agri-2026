@@ -135,17 +135,26 @@ class SpectralViTPixel(nn.Module):
         self.patch_size = patch_size
         H = W = patch_size
         # 1. Embed each spectral band
-        self.pixel_embed = nn.Linear(num_bands, d_model)
+        self.pixel_embed = nn.Sequential(
+            nn.Linear(num_bands, 256),
+            nn.GELU(),
+            nn.Linear(256, d_model)
+        )
+
+        # normalize
+        self.embed_norm = nn.LayerNorm(d_model)
 
         # 2D positional embeddings
         self.row_embed = nn.Parameter(torch.randn(H, d_model)) 
         self.col_embed = nn.Parameter(torch.randn(W, d_model))
 
         # 3. Transformer encoder
-        self.pixel_embed = nn.Sequential(
-            nn.Linear(num_bands, 256),
-            nn.GELU(),
-            nn.Linear(256, d_model)
+        encoder_layer = nn.TransformerEncoderLayer(
+             d_model=d_model,
+             nhead=nhead,
+             dim_feedforward=d_model * 4,
+             batch_first=True,
+             norm_first=True
         )
 
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=depth)
@@ -164,6 +173,7 @@ class SpectralViTPixel(nn.Module):
 
         # Band embedding
         x = self.pixel_embed(x)  # (B, HW, d_model)
+        x = self.embed_norm(x)
 
         # Add spectral positional encoding
         rows = self.row_embed.unsqueeze(1).expand(H, W, -1) 
