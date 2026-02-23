@@ -142,12 +142,12 @@ class SpectralViTPixel(nn.Module):
         self.col_embed = nn.Parameter(torch.randn(W, d_model))
 
         # 3. Transformer encoder
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=d_model * 4,
-            batch_first=True
+        self.pixel_embed = nn.Sequential(
+            nn.Linear(num_bands, 256),
+            nn.GELU(),
+            nn.Linear(256, d_model)
         )
+
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=depth)
 
         # 4. Classification head
