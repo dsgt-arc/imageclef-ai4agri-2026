@@ -1,0 +1,30 @@
+[project]
+name = "002-utae-viticulture"
+version = "0.1.0"
+description = "U-TAE with regression head for viticulture crop suitability (±1 accuracy)"
+authors = [
+    { name = "kang" },
+]
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "rasterio>=1.3.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "ruff>=0.1.0",
+    "ipython>=8.0.0",
+    "matplotlib>=3.7.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

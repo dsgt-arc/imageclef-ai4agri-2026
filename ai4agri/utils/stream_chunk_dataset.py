@@ -4,18 +4,25 @@ Streams AgriPotential precomputed tensors as an IterableDataset.
 
 import os
 import random
+from typing import Literal
 
 import torch
 from torch.utils.data import IterableDataset, get_worker_info
 
 
 class StreamingChunkDataset(IterableDataset):
-    def __init__(self, chunk_dir, shuffle=True, seed=42):
+    def __init__(
+        self,
+        mode: Literal["train", "val", "test"],
+        chunk_dir: str | None = "data/precomputed_tensors",
+        shuffle=True,
+        seed=42,
+    ):
         super().__init__()
-        self.chunk_dir = chunk_dir
+        self.chunk_dir = f"{chunk_dir}/{mode}"
         # Sort files to ensure all workers start with the exact same baseline list
         self.chunk_files = sorted(
-            [f for f in os.listdir(chunk_dir) if f.endswith(".pt")]
+            [f for f in os.listdir(self.chunk_dir) if f.endswith(".pt")]
         )
         self.shuffle = shuffle
         self.seed = seed
@@ -47,7 +54,7 @@ class StreamingChunkDataset(IterableDataset):
             file_path = os.path.join(self.chunk_dir, chunk_file)
 
             # memory-mapped load leaves the heavy array on disk until yielded
-            payload = torch.load(file_path, weights_only=True, mmap=True)
+            payload = torch.load(file_path, weights_only=True)
             chunk_data = payload["data"]
             chunk_labels = payload["label"]
 
