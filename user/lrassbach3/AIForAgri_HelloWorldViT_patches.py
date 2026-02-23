@@ -246,9 +246,9 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-epochs = 150
-for i in trange(epochs):
-    for ind in trange(34):
+epochs = 30
+for i in trange(epochs, desc='epochs'):
+    for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
         #   print(f"file: {ind}")
         date = metadata.iloc[ind]
