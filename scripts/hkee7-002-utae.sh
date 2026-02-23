@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=002-utae
 #SBATCH --account=paceship-clef2026_img_ai4agri
-#SBATCH --gres=gpu:l40s:1
-#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:rtx6000:1
+#SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --time=16:00:00
 #SBATCH --qos=inferno
@@ -20,4 +20,4 @@ uv venv $HOME/scratch/.venv
 uv sync --package 002-utae
 
 # Run experiment
-uv run user/hkee7/experiments/002-utae/train.py --batch-size 24 --lr 0.001 --num-workers 2
+uv run user/hkee7/experiments/002-utae/train.py --batch-size 16 --lr 0.001 --num-workers 4
