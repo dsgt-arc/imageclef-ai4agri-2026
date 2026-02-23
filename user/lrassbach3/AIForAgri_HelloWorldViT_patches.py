@@ -231,7 +231,7 @@ class SpectralViTPixel(nn.Module):
 # debug
 # import os
 # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-from tqdm import tqdm
+from tqdm import trange
 
 # model init
 model = SpectralViTPixel(num_bands=10,num_classes=5).to(device)
@@ -246,87 +246,88 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
+epochs = 150
+for i in trange(epochs):
+    for ind in trange(34):
+        # for ind in range(34):
+        #   print(f"file: {ind}")
+        date = metadata.iloc[ind]
+        date_data = rasterio.open(root_path+date["filename"])
+        batch_size = 16
+        # 252 * 3 is max training
+        for n in range(48):
+            x = []
+            Y = []
+        #     print(f"file: {ind}; batch: {n}")
+            for i in range(batch_size):
+                index = i + (n * batch_size)
+                # print(f"index: {index}")
+                patch_row = train_df.iloc[index]["row"]
+                patch_col = train_df.iloc[index]["col"]
+                patch_size = train_df.iloc[index]["patch_size"]
+                patch_id = train_df.iloc[index]["patch_id"]
+                image_x = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
+                x.append(torch.from_numpy(image_x))
+                image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
+                Y.append(torch.from_numpy(image_y))
 
-for ind in tqdm(range(34)):
-# for ind in range(34):
-#   print(f"file: {ind}")
-  date = metadata.iloc[ind]
-  date_data = rasterio.open(root_path+date["filename"])
-  batch_size = 16
-  # 252 * 3 is max training
-  for n in range(48):
-    x = []
-    Y = []
-#     print(f"file: {ind}; batch: {n}")
-    for i in range(batch_size):
-      index = i + (n * batch_size)
-      # print(f"index: {index}")
-      patch_row = train_df.iloc[index]["row"]
-      patch_col = train_df.iloc[index]["col"]
-      patch_size = train_df.iloc[index]["patch_size"]
-      patch_id = train_df.iloc[index]["patch_id"]
-      image_x = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-      x.append(torch.from_numpy(image_x))
-      image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-      Y.append(torch.from_numpy(image_y))
+            x = torch.stack(x, dim=0)
+        #     print(f"xshape : {x.shape}")
+            x = x.to(torch.float32)
+            x = x.to(device)
 
-    x = torch.stack(x, dim=0)
-#     print(f"xshape : {x.shape}")
-    x = x.to(torch.float32)
-    x = x.to(device)
+            Y = torch.stack(Y, dim=0)
+            Y = Y.to(torch.int64)
+            Y = Y.to(device)
 
-    Y = torch.stack(Y, dim=0)
-    Y = Y.to(torch.int64)
-    Y = Y.to(device)
+        #     valid_ratio = (labels != 0).float().mean().item() 
+        #     print("Valid pixel ratio:", valid_ratio)
+            
+            # run forward pass on model
+            logits = model.forward(x)
+            # loss
+            B, K, grid_H, grid_W = logits.shape
+            patch = model.patch
+            H = W = grid_H * patch # 128
+            
+            labels = Y.reshape(B, H, W)
+            
+            patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch) 
+            # (B, grid_H, grid_W, patch, patch) # pick top-left pixel (or majority vote) 
+            patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1)
+            patch_labels = patch_labels.mode(dim=-1).values
+            # (B, grid_H, grid_W) 
+            # --------------------------------------- 
+            # 2. Build patch-level mask 
+            # --------------------------------------- 
+            patch_mask = patch_labels != 0 
+            # same shape as patch grid # --------------------------------------- 
+            #3. Flatten logits and labels # --------------------------------------- 
+            logits = logits.permute(0, 2, 3, 1).reshape(-1, K) 
+            patch_labels = patch_labels.reshape(-1) 
+            patch_mask = patch_mask.reshape(-1) 
+            # --------------------------------------- # 4. Apply mask # --------------------------------------- 
+            logits = logits[patch_mask] 
+            patch_labels = patch_labels[patch_mask] # --------------------------------------- 
+            # 5. Shift labels if needed # --------------------------------------- 
+            patch_labels = patch_labels - 1
+        
+            loss = criterion(logits, patch_labels).to(device)
 
-#     valid_ratio = (labels != 0).float().mean().item() 
-#     print("Valid pixel ratio:", valid_ratio)
-    
-    # run forward pass on model
-    logits = model.forward(x)
-    # loss
-    B, K, grid_H, grid_W = logits.shape
-    patch = model.patch
-    H = W = grid_H * patch # 128
-    
-    labels = Y.reshape(B, H, W)
-    
-    patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch) 
-    # (B, grid_H, grid_W, patch, patch) # pick top-left pixel (or majority vote) 
-    patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1)
-    patch_labels = patch_labels.mode(dim=-1).values
-    # (B, grid_H, grid_W) 
-    # --------------------------------------- 
-    # 2. Build patch-level mask 
-    # --------------------------------------- 
-    patch_mask = patch_labels != 0 
-    # same shape as patch grid # --------------------------------------- 
-    #3. Flatten logits and labels # --------------------------------------- 
-    logits = logits.permute(0, 2, 3, 1).reshape(-1, K) 
-    patch_labels = patch_labels.reshape(-1) 
-    patch_mask = patch_mask.reshape(-1) 
-    # --------------------------------------- # 4. Apply mask # --------------------------------------- 
-    logits = logits[patch_mask] 
-    patch_labels = patch_labels[patch_mask] # --------------------------------------- 
-    # 5. Shift labels if needed # --------------------------------------- 
-    patch_labels = patch_labels - 1
-   
-    loss = criterion(logits, patch_labels).to(device)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+            total_loss += loss.item() * patch_labels.numel()
 
-    total_loss += loss.item() * patch_labels.numel()
+            # Accuracy
+            preds = logits.argmax(dim=1)
+            total_correct += (preds == patch_labels).sum().item()
+            total_pixels+= patch_labels.numel()
 
-    # Accuracy
-    preds = logits.argmax(dim=1)
-    total_correct += (preds == patch_labels).sum().item()
-    total_pixels+= patch_labels.numel()
-
-    # Cuda cleanup
-    del x
-    del Y
+            # Cuda cleanup
+            del x
+            del Y
 
 
 # In[ ]:
