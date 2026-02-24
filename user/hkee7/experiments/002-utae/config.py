@@ -29,7 +29,7 @@ class Config:
     scheduler: str = "cosine"  # "cosine" or "step"
     step_gamma: float = 0.5
     step_size: int = 15
-    num_workers: int = 4
+    num_workers: int = 0
     pin_memory: bool = True
 
     # ---- Loss ---------------------------------------------------------------
@@ -43,5 +43,5 @@ class Config:
     seed: int = 42
     save_dir: str = "artifacts"
     log_every: int = 20  # batches
-    device: str = "cuda"
-    use_amp: bool = True  # mixed precision
+    device: str = "mps"
+    use_amp: bool = False  # mixed precision
