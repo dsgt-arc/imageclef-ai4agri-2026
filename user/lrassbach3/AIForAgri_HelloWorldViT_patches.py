@@ -246,7 +246,7 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-epochs = 30
+epochs = 1
 for i in trange(epochs, desc='epochs'):
     for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
@@ -331,6 +331,8 @@ for i in trange(epochs, desc='epochs'):
 
 
 # In[ ]:
+
+torch.save(model.state_dict(), 'model_weights.pth')
 
 
 avg_loss = total_loss / total_pixels
