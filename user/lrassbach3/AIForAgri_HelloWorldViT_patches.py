@@ -390,14 +390,19 @@ else:
                 labels = Y.squeeze(1)
                 #print(f"labels: {labels.shape}")
                 patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch)
-                #print(f"patch labels: {patch_labels.shape}")
-                #patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1) 
-                #print("unique test labels:", torch.unique(Y)) 
-                #print("preds:", logits.argmax(dim=1)[0, :5, :5]) 
-                #print("patch_labels:", patch_labels.reshape(B, grid_H, grid_W)[0, :5, :5])
                 patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1).mode(dim=-1).values
+                
+                patch_mask = patch_labels != 0
+
                 logits = logits.permute(0,2,3,1).reshape(-1, K) 
                 patch_labels = patch_labels.reshape(-1) 
+                patch_mask = patch_mask.reshape(-1)
+                
+                logits = logits[patch_mask]
+                patch_labels = patch_labels[patch_mask]
+
+                patch_labels = patch_labels - 1
+
                 preds = logits.argmax(dim=1) 
                 total_correct += (preds == patch_labels).sum().item() 
                 total_pixels += patch_labels.numel()
