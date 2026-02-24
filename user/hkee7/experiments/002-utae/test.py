@@ -49,7 +49,8 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
 
             with torch.autocast(cfg.device, enabled=cfg.use_amp):
                 raw = model(data, batch_positions=doys)
-                preds = raw.round().clamp(2, 4).long()  # train [2,4] → submission [2,4]
+                preds = raw.round().clamp(2, 4).long() - 1
+                # train [2,4] → submission [1,3]
 
             for pred, pid in zip(preds.cpu().numpy(), patch_ids, strict=False):
                 img = Image.fromarray(pred.astype(np.uint8), mode="L")
