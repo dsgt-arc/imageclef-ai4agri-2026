@@ -36,7 +36,7 @@ from rasterio import rasterio
 from rasterio.windows import Window
 
 train_subset_path = root_path + "train.csv"
-test_subset_path = root_path + "train.csv"
+test_subset_path = root_path + "val.csv"
 train_df = pd.read_csv(train_subset_path)
 test_df = pd.read_csv(test_subset_path)
 
@@ -352,9 +352,9 @@ else:
         for ind in trange(34, desc='files', leave=False):
             date = metadata.iloc[ind]
             date_data = rasterio.open(root_path+date["filename"])
-            batch_size = 20 # TODO these will need to be revisited
+            batch_size = 16 # TODO these will need to be revisited
             # 252 * 3 is max training
-            for n in range(40):
+            for n in range(48):
                 x = []
                 Y = []
       #     print(f"file: {ind}; batch: {n}")
@@ -371,11 +371,11 @@ else:
                     Y.append(torch.from_numpy(image_y))
                 
                 x = torch.stack(x, dim=0)
-                print(f"xshape : {x.shape}")
+                #print(f"xshape : {x.shape}")
                 x = x.to(torch.float32)
                 x = x.to(device)
                 Y = torch.stack(Y, dim=0)
-                print(f"yshape : {Y.shape}")
+                #print(f"yshape : {Y.shape}")
                 Y = Y.to(torch.int64)
                 Y = Y.to(device)
                 logits = model.forward(x) 
@@ -383,16 +383,20 @@ else:
         # --- same patch label logic as training --- 
                 B, K, grid_H, grid_W = logits.shape 
                 patch = model.patch
-                print(f"patch: {patch}")
-                print(f"logits: {logits.shape}")
+                #print(f"patch: {patch}")
+                #print(f"logits: {logits.shape}")
                 H = W = grid_H * patch 
-                labels = Y.reshape(B, H, W) 
-                print(f"labels: {labels.shape}")
+                #labels = Y.reshape(B, H, W) 
+                labels = Y.squeeze(1)
+                #print(f"labels: {labels.shape}")
                 patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch)
-                print(f"patch labels: {patch_labels.shape}")
-                patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1) 
-                patch_labels = patch_labels.mode(dim=-1).values 
-                logits = logits.pemute(0,2,3,1).reshape(-1, K) 
+                #print(f"patch labels: {patch_labels.shape}")
+                #patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1) 
+                #print("unique test labels:", torch.unique(Y)) 
+                #print("preds:", logits.argmax(dim=1)[0, :5, :5]) 
+                #print("patch_labels:", patch_labels.reshape(B, grid_H, grid_W)[0, :5, :5])
+                patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1).mode(dim=-1).values
+                logits = logits.permute(0,2,3,1).reshape(-1, K) 
                 patch_labels = patch_labels.reshape(-1) 
                 preds = logits.argmax(dim=1) 
                 total_correct += (preds == patch_labels).sum().item() 
