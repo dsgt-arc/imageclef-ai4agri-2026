@@ -20,4 +20,4 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 002-utae
 
 # Run experiment
-uv run user/hkee7/experiments/002-utae/train.py --batch-size 16 --lr 0.001 --num-workers 4
+uv run user/hkee7/experiments/002-utae/train.py --batch-size 12 --lr 0.001 --num-workers 4

@@ -52,6 +52,7 @@ class UTAEDataset(Dataset):
         self._cache_file: str | None = None
         self._cache_data = None
         self._cache_label = None
+        self._cache_ids = None
 
     def __len__(self):
         return len(self.index)
@@ -63,11 +64,13 @@ class UTAEDataset(Dataset):
             self._cache_file = f
             self._cache_data = payload["data"]
             self._cache_label = payload["label"]
+            self._cache_ids = payload["patch_ids"]
 
         data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE
         data = data.clamp(0.0, 1.0)
         label = self._cache_label[patch_idx]
-        return data, label, self.time_offsets
+        patch_id = self._cache_ids[patch_idx]
+        return data, label, self.time_offsets, patch_id
 
 
 class ChunkAwareSampler(Sampler):

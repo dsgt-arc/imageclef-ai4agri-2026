@@ -71,7 +71,7 @@ def train_one_epoch(
     total_loss = 0.0
     n_batches = 0
 
-    for i, (data, labels, doys) in enumerate(loader):
+    for i, (data, labels, doys, _) in enumerate(loader):
         data = data.to(cfg.device, non_blocking=True)
         labels = labels.to(cfg.device, non_blocking=True)
         doys = doys.to(cfg.device, non_blocking=True).float()
@@ -108,7 +108,7 @@ def validate(model: nn.Module, loader: DataLoader, cfg: Config):
     model.eval()
     all_pm1, all_exact, all_mae, n = 0.0, 0.0, 0.0, 0
 
-    for data, labels, doys in loader:
+    for data, labels, doys, _ in loader:
         data = data.to(cfg.device, non_blocking=True)
         labels = labels.to(cfg.device, non_blocking=True)
         doys = doys.to(cfg.device, non_blocking=True).float()
@@ -151,16 +151,12 @@ def main(cfg: Config):
         sampler=ChunkAwareSampler(train_ds, shuffle=True, seed=cfg.seed),
         num_workers=cfg.num_workers,
         pin_memory=cfg.pin_memory,
-        persistent_workers=True,
-        prefetch_factor=4,
         drop_last=True,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
-        persistent_workers=True,
-        prefetch_factor=4,
         pin_memory=cfg.pin_memory,
     )
 
