@@ -23,13 +23,15 @@ class Config:
 
     # ---- Training -----------------------------------------------------------
     epochs: int = 50
-    batch_size: int = 32
-    lr: float = 3e-3
+    batch_size: int = 12
+    lr: float = 1e-3
     weight_decay: float = 1e-4
     scheduler: str = "cosine"  # "cosine" or "step"
+    cosine_t0: int = 10  # CosineAnnealingWarmRestarts: first cycle length
+    cosine_t_mult: int = 2  # cycle length multiplier after each restart
     step_gamma: float = 0.5
     step_size: int = 15
-    num_workers: int = 0
+    num_workers: int = 4
     pin_memory: bool = True
 
     # ---- Loss ---------------------------------------------------------------
@@ -43,5 +45,5 @@ class Config:
     seed: int = 42
     save_dir: str = "artifacts"
     log_every: int = 20  # batches
-    device: str = "mps"
-    use_amp: bool = False  # mixed precision
+    device: str = "cuda"
+    use_amp: bool = True  # mixed precision

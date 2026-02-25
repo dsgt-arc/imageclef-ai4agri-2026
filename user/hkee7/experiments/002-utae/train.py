@@ -106,7 +106,7 @@ def train_one_epoch(
 @torch.no_grad()
 def validate(model: nn.Module, loader: DataLoader, cfg: Config):
     model.eval()
-    all_pm1, all_exact, all_mae, n = 0.0, 0.0, 0.0, 0
+    total_pm1, total_exact, total_mae, total_pixels = 0.0, 0.0, 0.0, 0
 
     for data, labels, doys, _ in loader:
         data = data.to(cfg.device, non_blocking=True)
@@ -117,15 +117,18 @@ def validate(model: nn.Module, loader: DataLoader, cfg: Config):
             raw = model(data, batch_positions=doys)
             preds = raw.round().clamp(2, 4).long()
 
-        all_pm1 += pm1_accuracy(preds, labels, cfg.ignore_index)
-        all_exact += exact_accuracy(preds, labels, cfg.ignore_index)
-        all_mae += mae(preds, labels, cfg.ignore_index)
-        n += 1
+        n_valid = (labels != cfg.ignore_index).sum().item()
+        if n_valid == 0:
+            continue
+        total_pm1 += pm1_accuracy(preds, labels, cfg.ignore_index) * n_valid
+        total_exact += exact_accuracy(preds, labels, cfg.ignore_index) * n_valid
+        total_mae += mae(preds, labels, cfg.ignore_index) * n_valid
+        total_pixels += n_valid
 
     return {
-        "pm1_acc": all_pm1 / max(n, 1),
-        "exact_acc": all_exact / max(n, 1),
-        "mae": all_mae / max(n, 1),
+        "pm1_acc": total_pm1 / max(total_pixels, 1),
+        "exact_acc": total_exact / max(total_pixels, 1),
+        "mae": total_mae / max(total_pixels, 1),
     }
 
 
@@ -169,8 +172,8 @@ def main(cfg: Config):
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
     if cfg.scheduler == "cosine":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=cfg.epochs
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer, T_0=cfg.cosine_t0, T_mult=cfg.cosine_t_mult
         )
     else:
         scheduler = torch.optim.lr_scheduler.StepLR(
