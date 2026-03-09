@@ -22,10 +22,10 @@ class Config:
     d_k: int = 4
 
     # ---- Training -----------------------------------------------------------
-    epochs: int = 50
+    epochs: int = 100
     batch_size: int = 12
     lr: float = 1e-3
-    weight_decay: float = 1e-4
+    weight_decay: float = 1e-3
     scheduler: str = "cosine"  # "cosine" or "step"
     cosine_t0: int = 10  # CosineAnnealingWarmRestarts: first cycle length
     cosine_t_mult: int = 2  # cycle length multiplier after each restart
