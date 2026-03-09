@@ -7,6 +7,7 @@ Reads precomputed .pt chunk files directly — no external dependencies.
 from __future__ import annotations
 
 import os
+import random
 from typing import Literal
 
 import numpy as np
@@ -36,6 +37,7 @@ class UTAEDataset(Dataset):
         mode: Literal["train", "val", "test"],
         chunk_dir: str = "data/precomputed_tensors",
         metadata_path: str = "data/agripotential/metadata.csv",
+        augment: bool = False,
     ):
         self.chunk_dir = os.path.join(chunk_dir, mode)
         chunk_files = sorted(f for f in os.listdir(self.chunk_dir) if f.endswith(".pt"))
@@ -48,6 +50,8 @@ class UTAEDataset(Dataset):
 
         meta = pl.read_csv(metadata_path)
         self.time_offsets = torch.from_numpy(_parse_positions(meta))
+
+        self.augment = augment
 
         self._cache_file: str | None = None
         self._cache_data = None
@@ -70,6 +74,10 @@ class UTAEDataset(Dataset):
         data = data.clamp(0.0, 1.0)
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx]
+
+        if self.augment:
+            data, label = _random_spatial_augment(data, label)
+
         return data, label, self.time_offsets, patch_id
 
 
@@ -99,6 +107,23 @@ class ChunkAwareSampler(Sampler):
 
     def __len__(self):
         return sum(len(c) for c in self.chunks)
+
+
+def _random_spatial_augment(
+    data: torch.Tensor, label: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Random flips and 90° rotations applied identically to data and label."""
+    if random.random() < 0.5:
+        data = data.flip(-1)
+        label = label.flip(-1)
+    if random.random() < 0.5:
+        data = data.flip(-2)
+        label = label.flip(-2)
+    k = random.randint(0, 3)
+    if k > 0:
+        data = torch.rot90(data, k, dims=(-2, -1))
+        label = torch.rot90(label, k, dims=(-2, -1))
+    return data, label
 
 
 def _parse_positions(meta: pl.DataFrame) -> np.ndarray:

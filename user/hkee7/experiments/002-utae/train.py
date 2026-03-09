@@ -143,8 +143,8 @@ def main(cfg: Config):
 
     # ---- Data ---------------------------------------------------------------
     print("Loading datasets …")
-    train_ds = UTAEDataset("train", cfg.data_path, cfg.metadata_path)
-    val_ds = UTAEDataset("val", cfg.data_path, cfg.metadata_path)
+    train_ds = UTAEDataset("train", cfg.data_path, cfg.metadata_path, augment=True)
+    val_ds = UTAEDataset("val", cfg.data_path, cfg.metadata_path, augment=False)
 
     print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
 

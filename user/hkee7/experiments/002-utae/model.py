@@ -60,7 +60,7 @@ class UTAERegression(nn.Module):
             (B, H, W) continuous prediction
         """
         out = self.utae(x, batch_positions=batch_positions)  # (B, 1, H, W)
-        return out.squeeze(1).sigmoid() * 4 + 1  # (B, H, W) in [1, 5]
+        return out.squeeze(1).sigmoid() * 4 + 1  # (B, H, W)
 
     def predict(self, x: torch.Tensor, batch_positions=None) -> torch.Tensor:
         """Return integer class predictions clamped to [1, 5]."""
