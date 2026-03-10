@@ -207,20 +207,22 @@ def main(cfg: Config):
             f"({elapsed:.0f}s)"
         )
 
-        # Save best
+        ckpt = {
+            "epoch": epoch + 1,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "metrics": metrics,
+            "config": cfg,
+        }
+
+        # Always save last checkpoint
+        torch.save(ckpt, os.path.join(cfg.save_dir, "last.pt"))
+
+        # Save best by val ±1 accuracy
         if metrics["pm1_acc"] > best_pm1:
             best_pm1 = metrics["pm1_acc"]
             path = os.path.join(cfg.save_dir, "best.pt")
-            torch.save(
-                {
-                    "epoch": epoch + 1,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "metrics": metrics,
-                    "config": cfg,
-                },
-                path,
-            )
+            torch.save(ckpt, path)
             print(f"  ↑ new best ±1 accuracy — saved to {path}")
 
     print(f"\nDone. Best ±1 accuracy: {best_pm1:.4f}")
