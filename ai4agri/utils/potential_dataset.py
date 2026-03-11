@@ -1,9 +1,12 @@
-# Copied from https://github.com/MohammadElSakka/agripotential/blob/main/agripotential/dataset/potential_dataset.py
+"""
+Copied from https://github.com/MohammadElSakka/agripotential/blob/main/agripotential/dataset/potential_dataset.py
+"""
+
 import os
 from typing import Literal
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import rasterio
 from rasterio.windows import Window
 
@@ -27,15 +30,15 @@ class PotentialDataset:
         self.label_path = os.path.join(self.data_path, f"{label_name}.tif")
 
         self.sentinel2_paths: list[str] = []
-        self.patches: pd.DataFrame = pd.DataFrame()
+        self.patches: pl.DataFrame = pl.DataFrame()
         self._setup()
 
     def _setup(self):
-        metadata_df = pd.read_csv(self.metadata_path)
+        metadata_df = pl.read_csv(self.metadata_path)
         self.sentinel2_paths = [
             os.path.join(self.data_path, f) for f in metadata_df["filename"]
         ]
-        self.patches = pd.read_csv(self.patch_csv_path)
+        self.patches = pl.read_csv(self.patch_csv_path)
 
     def __len__(self) -> int:
         return len(self.patches)

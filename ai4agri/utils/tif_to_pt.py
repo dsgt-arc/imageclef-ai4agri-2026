@@ -32,7 +32,7 @@ for i in tqdm(range(len(dataset))):
     if len(data_chunk) == CHUNK_SIZE or i == len(dataset) - 1:
         torch.save(
             {
-                "utils": torch.stack(
+                "data": torch.stack(
                     data_chunk
                 ),  # Shape becomes (256, 34, 10, 128, 128)
                 "label": torch.stack(label_chunk),  # Shape becomes (256,)
