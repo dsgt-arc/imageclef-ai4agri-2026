@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=vit_full_training_6k
+#SBATCH --job-name=vit_80epochs_fulldatan
 #SBATCH --account=paceship-clef2026_img_ai4agri
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=4G
 #SBATCH --time=12:00:00
-#SBATCH --gres=gpu:h100:1    
+#SBATCH --gres=gpu:h100:8    
 #SBATCH --qos=inferno
 #SBATCH --output=job-%j.out
 #SBATCH --error=job-%j.err
