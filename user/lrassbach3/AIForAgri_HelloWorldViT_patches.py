@@ -244,7 +244,7 @@ criterion = nn.CrossEntropyLoss()
 x = []
 Y = []
 print("computing mean & std")
-for ind in trange(34, desc='files', leave=False):
+for ind in trange(1, desc='files', leave=False):
         # for ind in range(34):
         #   print(f"file: {ind}")
             date = metadata.iloc[ind]
@@ -280,7 +280,7 @@ size = 800
 train_mode = True
 if train_mode:
     print("train mode")
-    epochs = 150
+    epochs = 1
     for i in trange(epochs, desc='epochs'):
         for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
