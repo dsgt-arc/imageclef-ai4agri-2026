@@ -2,11 +2,11 @@
 #SBATCH --job-name=002-utae
 #SBATCH --account=paceship-clef2026_img_ai4agri
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=RTX6000
+#SBATCH --partition=gpu-rtxpro-blackwell
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --time=16:00:00
-#SBATCH --qos=inferno
+#SBATCH --qos=embers
 #SBATCH --output=artifacts/slurm-%j.out
 
 module load pytorch/2.1.0
@@ -20,4 +20,4 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 002-utae
 
 # Run experiment
-uv run user/hkee7/experiments/002-utae/train.py --batch-size 12 --lr 0.001 --num-workers 4
+uv run user/hkee7/experiments/002-utae/train.py --batch-size 32 --lr 0.001 --num-workers 4
