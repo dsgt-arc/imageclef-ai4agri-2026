@@ -20,6 +20,7 @@
 
 import pandas as pd
 import numpy as np
+import sys
 
 # root_path: The directory where the dataset is downloaded or hosted.
 root_path = "https://huggingface.co/datasets/m-sakka/agripotential/resolve/main/"
@@ -239,6 +240,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 criterion = nn.CrossEntropyLoss()
 
 # get mean for normalization
+
 x = []
 Y = []
 print("computing mean & std")
@@ -275,7 +277,7 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-train_mode = False
+train_mode = True
 if train_mode:
     print("train mode")
     epochs = 150
@@ -304,7 +306,7 @@ if train_mode:
                     Y.append(torch.from_numpy(image_y))
 
                 x = torch.stack(x, dim=0)
-                x = (x - mean[None, :, None, None]) / std[None, :, None, None]
+                #x = (x - mean[None, :, None, None]) / std[None, :, None, None]
 
         #     print(f"xshape : {x.shape}")
                 x = x.to(torch.float32)
