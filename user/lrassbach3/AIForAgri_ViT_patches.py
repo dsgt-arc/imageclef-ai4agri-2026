@@ -265,6 +265,8 @@ for ind in trange(1, desc='files', leave=False):
                     x.append(torch.from_numpy(image_x))
                     image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
                     Y.append(torch.from_numpy(image_y))
+x = torch.stack(x, dim=0)
+x = x.to(torch.float32)
 mean = x.mean(dim=(0,2,3))   # shape (C,)
 std  = x.std(dim=(0,2,3))    # shape (C,)
 
@@ -306,7 +308,7 @@ if train_mode:
                     Y.append(torch.from_numpy(image_y))
 
                 x = torch.stack(x, dim=0)
-                #x = (x - mean[None, :, None, None]) / std[None, :, None, None]
+                x = (x - mean[None, :, None, None]) / std[None, :, None, None]
 
         #     print(f"xshape : {x.shape}")
                 x = x.to(torch.float32)
