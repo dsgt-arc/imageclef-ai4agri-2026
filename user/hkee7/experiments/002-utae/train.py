@@ -143,7 +143,9 @@ def main(cfg: Config):
 
     # ---- Data ---------------------------------------------------------------
     print("Loading datasets …")
-    train_ds = UTAEDataset("train", cfg.data_path, cfg.metadata_path, augment=True)
+    train_ds = UTAEDataset(
+        "train", cfg.data_path, cfg.metadata_path, augment=cfg.augment
+    )
     val_ds = UTAEDataset("val", cfg.data_path, cfg.metadata_path, augment=False)
 
     print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
@@ -244,6 +246,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--save-dir", type=str)
+    parser.add_argument("--augment", action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
 
     cfg = Config()

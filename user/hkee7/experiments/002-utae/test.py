@@ -3,6 +3,8 @@ Generate test predictions for AI4Agri submission.
 
 Outputs a ZIP of PNG segmentation masks named by patch_id.
 Pixel values: 0 (very low) to 4 (very high).
+
+Supports optional test-time augmentation (TTA) via --tta flag.
 """
 
 import argparse
@@ -17,8 +19,35 @@ from model import UTAERegression
 from PIL import Image
 from torch.utils.data import DataLoader
 
+# 8 geometric augmentations (original + 7 flips/rotations)
+_TTA_AUGMENTS = [
+    lambda x: x,
+    lambda x: x.flip(-1),
+    lambda x: x.flip(-2),
+    lambda x: x.flip(-1).flip(-2),
+    lambda x: torch.rot90(x, 1, [-2, -1]),
+    lambda x: torch.rot90(x, 2, [-2, -1]),
+    lambda x: torch.rot90(x, 3, [-2, -1]),
+    lambda x: torch.rot90(x, 1, [-2, -1]).flip(-1),
+]
 
-def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
+
+def _tta_predict(model, data, doys, cfg):
+    """Average continuous predictions over 8 geometric augmentations."""
+    preds = []
+    for aug in _TTA_AUGMENTS:
+        with torch.autocast(cfg.device, enabled=cfg.use_amp):
+            raw = model(aug(data), batch_positions=doys)
+        preds.append(raw)
+    return torch.stack(preds).mean(0)
+
+
+def predict(
+    checkpoint_path: str,
+    cfg: Config,
+    output_dir: str = "submission",
+    tta: bool = False,
+):
     ckpt = torch.load(checkpoint_path, weights_only=False, map_location=cfg.device)
     model = UTAERegression(
         input_dim=cfg.num_bands,
@@ -30,6 +59,8 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
     ).to(cfg.device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
+
+    print(f"TTA: {'enabled (8 augmentations)' if tta else 'disabled'}")
 
     test_ds = UTAEDataset("test", cfg.data_path, cfg.metadata_path)
     test_loader = DataLoader(
@@ -47,10 +78,13 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
             data = data.to(cfg.device, non_blocking=True)
             doys = doys.to(cfg.device, non_blocking=True).float()
 
-            with torch.autocast(cfg.device, enabled=cfg.use_amp):
-                raw = model(data, batch_positions=doys)
-                preds = raw.round().clamp(2, 4).long() - 1
-                # train [2,4] → submission [1,3]
+            if tta:
+                raw = _tta_predict(model, data, doys, cfg)
+            else:
+                with torch.autocast(cfg.device, enabled=cfg.use_amp):
+                    raw = model(data, batch_positions=doys)
+
+            preds = raw.round().clamp(2, 4).long() - 1  # train [2,4] → submission [1,3]
 
             for pred, pid in zip(preds.cpu().numpy(), patch_ids, strict=False):
                 img = Image.fromarray(pred.astype(np.uint8), mode="L")
@@ -70,6 +104,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate AI4Agri test submission")
     parser.add_argument("--checkpoint", type=str, default="artifacts/best.pt")
     parser.add_argument("--output-dir", type=str, default="submission")
+    parser.add_argument(
+        "--tta", action="store_true", help="Enable test-time augmentation"
+    )
     parser.add_argument("--device", type=str)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--num-workers", type=int)
@@ -77,6 +114,6 @@ if __name__ == "__main__":
 
     cfg = Config()
     for key, value in vars(args).items():
-        if key not in ("checkpoint", "output_dir") and value is not None:
+        if key not in ("checkpoint", "output_dir", "tta") and value is not None:
             setattr(cfg, key.replace("-", "_"), value)
-    predict(args.checkpoint, cfg, args.output_dir)
+    predict(args.checkpoint, cfg, args.output_dir, tta=args.tta)

@@ -41,6 +41,9 @@ class Config:
     # For classification mode:
     ignore_index: int = 0  # unlabelled pixels
 
+    # ---- Augmentation -------------------------------------------------------
+    augment: bool = False  # spatial augmentation (flips + rotations) during training
+
     # ---- Misc ---------------------------------------------------------------
     seed: int = 42
     save_dir: str = "artifacts"
