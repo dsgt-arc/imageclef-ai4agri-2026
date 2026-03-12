@@ -2,12 +2,11 @@
 #SBATCH --job-name=002-utae
 #SBATCH --account=paceship-clef2026_img_ai4agri
 #SBATCH --gres=gpu:1
-#SBATCH --partition=gpu
 #SBATCH --constraint=RTX6000
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --time=16:00:00
-#SBATCH --qos=embers
+#SBATCH --qos=inferno
 #SBATCH --output=artifacts/slurm-%j.out
 
 module load pytorch/2.1.0
