@@ -23,7 +23,7 @@ class Config:
 
     # ---- Training -----------------------------------------------------------
     epochs: int = 50
-    batch_size: int = 32
+    batch_size: int = 8
     lr: float = 1e-3
     weight_decay: float = 1e-4
     scheduler: str = "cosine"  # "cosine" or "step"
