@@ -15,6 +15,8 @@ class Config:
     num_bands: int = 10
 
     # ---- Model --------------------------------------------------------------
+    mode: str = "ordinal"  # "regression", "classification", or "ordinal"
+    num_classes: int = 5  # classes 1–5 (label 0 = unlabelled/ignore)
     encoder_widths: list[int] = field(default_factory=lambda: [64, 64, 64, 128])
     decoder_widths: list[int] = field(default_factory=lambda: [32, 32, 64, 128])
     n_head: int = 16
