@@ -19,31 +19,39 @@ from model import UTAEClassification, UTAEOrdinal, UTAERegression
 from PIL import Image
 from torch.utils.data import DataLoader
 
-# 8 geometric augmentations (original + 7 flips/rotations)
+# 8 geometric augmentations paired with their spatial inverses.
+# Each entry is (aug_fn, deaug_fn) where deaug_fn undoes the spatial
+# transform on the output before averaging, so all predictions are
+# aligned to the original orientation.
 _TTA_AUGMENTS = [
-    lambda x: x,
-    lambda x: x.flip(-1),
-    lambda x: x.flip(-2),
-    lambda x: x.flip(-1).flip(-2),
-    lambda x: torch.rot90(x, 1, [-2, -1]),
-    lambda x: torch.rot90(x, 2, [-2, -1]),
-    lambda x: torch.rot90(x, 3, [-2, -1]),
-    lambda x: torch.rot90(x, 1, [-2, -1]).flip(-1),
+    (lambda x: x,                                              lambda x: x),
+    (lambda x: x.flip(-1),                                     lambda x: x.flip(-1)),
+    (lambda x: x.flip(-2),                                     lambda x: x.flip(-2)),
+    (lambda x: x.flip(-1).flip(-2),                            lambda x: x.flip(-1).flip(-2)),
+    (lambda x: torch.rot90(x, 1, [-2, -1]),                    lambda x: torch.rot90(x, 3, [-2, -1])),
+    (lambda x: torch.rot90(x, 2, [-2, -1]),                    lambda x: torch.rot90(x, 2, [-2, -1])),
+    (lambda x: torch.rot90(x, 3, [-2, -1]),                    lambda x: torch.rot90(x, 1, [-2, -1])),
+    (lambda x: torch.rot90(x, 1, [-2, -1]).flip(-1),           lambda x: torch.rot90(x.flip(-1), 3, [-2, -1])),
 ]
 
 
 def _tta_predict(model, data, doys, cfg):
     """Average predictions over 8 geometric augmentations.
 
+    Each augmentation is applied to the input; the inverse transform is
+    applied to the output before averaging so all predictions are in the
+    original spatial orientation.
+
     - classification: averages softmax probabilities, then argmax.
     - ordinal: averages sigmoid probabilities, then threshold count.
     - regression: averages continuous outputs directly.
-    Returns the averaged output in a form ready for the prediction step.
     """
     preds = []
-    for aug in _TTA_AUGMENTS:
+    for aug_fn, deaug_fn in _TTA_AUGMENTS:
         with torch.autocast(cfg.device, enabled=cfg.use_amp):
-            out = model(aug(data), batch_positions=doys)
+            out = model(aug_fn(data), batch_positions=doys)
+        # De-augment the spatial dimensions of the output before accumulating.
+        out = deaug_fn(out)
         if cfg.mode == "classification":
             preds.append(out.softmax(dim=1))
         elif cfg.mode == "ordinal":
