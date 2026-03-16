@@ -244,7 +244,7 @@ criterion = nn.CrossEntropyLoss()
 x = []
 Y = []
 print("computing mean & std")
-for ind in trange(1, desc='files', leave=False):
+for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
         #   print(f"file: {ind}")
             date = metadata.iloc[ind]
@@ -265,6 +265,7 @@ for ind in trange(1, desc='files', leave=False):
                     x.append(torch.from_numpy(image_x))
                     image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
                     Y.append(torch.from_numpy(image_y))
+            del date_data
 x = torch.stack(x, dim=0)
 x = x.to(torch.float32)
 mean = x.mean(dim=(0,2,3))   # shape (C,)
@@ -282,7 +283,7 @@ size = 800
 train_mode = True
 if train_mode:
     print("train mode")
-    epochs = 1
+    epochs = 80
     for i in trange(epochs, desc='epochs'):
         for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
@@ -366,11 +367,12 @@ if train_mode:
             # Cuda cleanup
                 del x
                 del Y
-
+            # clean up files streamed to memory
+            del date_data
 
 # In[ ]:
 
-    # torch.save(model.state_dict(), 'model_weights.pth')
+    torch.save(model.state_dict(), 'model_weights.pth')
 
 
     avg_loss = total_loss / total_pixels
