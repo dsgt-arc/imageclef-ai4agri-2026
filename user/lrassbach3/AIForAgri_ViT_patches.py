@@ -244,6 +244,50 @@ criterion = nn.CrossEntropyLoss()
 x = []
 Y = []
 print("computing mean & std")
+
+channel_sum = None
+channel_sq_sum = None
+pixel_count = 0
+
+for ind in trange(34, desc='files', leave=False):
+    date = metadata.iloc[ind]
+    date_data = rasterio.open(root_path + date["filename"])
+    batch_size = 16
+    for n in range(395):
+        for i in range(batch_size): 
+            index = i + (n * batch_size)
+
+            patch_row = train_df.iloc[index]["row"]
+            patch_col = train_df.iloc[index]["col"]
+            patch_size = train_df.iloc[index]["patch_size"]
+
+            patch = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
+            patch = torch.from_numpy(patch).float()  # (C, H, W)
+
+            C, H, W = patch.shape
+            pixels = H * W
+
+            # Initialize accumulators on first patch
+            if channel_sum is None:
+                channel_sum = torch.zeros(C)
+                channel_sq_sum = torch.zeros(C)
+
+            # Sum over spatial dims
+            patch_flat = patch.view(C, -1)
+            channel_sum += patch_flat.sum(dim=1)
+            channel_sq_sum += (patch_flat ** 2).sum(dim=1)
+            pixel_count += pixels
+
+    date_data.close()
+
+# Final statistics
+mean = channel_sum / pixel_count
+std = torch.sqrt(channel_sq_sum / pixel_count - mean ** 2)
+
+print("mean:", mean)
+print("std:", std)
+
+'''
 for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
         #   print(f"file: {ind}")
@@ -270,7 +314,7 @@ x = torch.stack(x, dim=0)
 x = x.to(torch.float32)
 mean = x.mean(dim=(0,2,3))   # shape (C,)
 std  = x.std(dim=(0,2,3))    # shape (C,)
-
+'''
 
 total_loss = 0
 total_correct = 0
@@ -290,7 +334,6 @@ if train_mode:
         #   print(f"file: {ind}")
             date = metadata.iloc[ind]
             date_data = rasterio.open(root_path+date["filename"])
-            # TODO - this is majorly undertrained. instead of 800 rows of data, there are 6330
             batch_size = 16
             for n in range(395):
                 x = []
@@ -368,7 +411,7 @@ if train_mode:
                 del x
                 del Y
             # clean up files streamed to memory
-            del date_data
+            date_data.close()
 
 # In[ ]:
 
