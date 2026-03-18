@@ -19,6 +19,8 @@
 # %pip install --upgrade python-dateutil pytz
 
 import pandas as pd
+import numpy as np
+import sys
 
 # root_path: The directory where the dataset is downloaded or hosted.
 root_path = "https://huggingface.co/datasets/m-sakka/agripotential/resolve/main/"
@@ -237,6 +239,39 @@ model = SpectralViTPixel(num_bands=10,num_classes=5).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 criterion = nn.CrossEntropyLoss()
 
+# get mean for normalization
+
+x = []
+Y = []
+print("computing mean & std")
+for ind in trange(34, desc='files', leave=False):
+        # for ind in range(34):
+        #   print(f"file: {ind}")
+            date = metadata.iloc[ind]
+            date_data = rasterio.open(root_path+date["filename"])
+            # TODO - this is majorly undertrained. instead of 800 rows of data, there are 6330
+            batch_size = 16
+        # 252 * 3 is max training
+            for n in range(395):
+        #     print(f"file: {ind}; batch: {n}")
+                for i in range(batch_size):
+                    index = i + (n * batch_size)
+                # print(f"index: {index}")
+                    patch_row = train_df.iloc[index]["row"]
+                    patch_col = train_df.iloc[index]["col"]
+                    patch_size = train_df.iloc[index]["patch_size"]
+                    patch_id = train_df.iloc[index]["patch_id"]
+                    image_x = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
+                    x.append(torch.from_numpy(image_x))
+                    image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
+                    Y.append(torch.from_numpy(image_y))
+            del date_data
+x = torch.stack(x, dim=0)
+x = x.to(torch.float32)
+mean = x.mean(dim=(0,2,3))   # shape (C,)
+std  = x.std(dim=(0,2,3))    # shape (C,)
+
+
 total_loss = 0
 total_correct = 0
 total_pixels = 0
@@ -245,10 +280,10 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-train_mode = False
+train_mode = True
 if train_mode:
     print("train mode")
-    epochs = 150
+    epochs = 80
     for i in trange(epochs, desc='epochs'):
         for ind in trange(34, desc='files', leave=False):
         # for ind in range(34):
@@ -257,8 +292,7 @@ if train_mode:
             date_data = rasterio.open(root_path+date["filename"])
             # TODO - this is majorly undertrained. instead of 800 rows of data, there are 6330
             batch_size = 16
-        # 252 * 3 is max training
-            for n in range(48):
+            for n in range(395):
                 x = []
                 Y = []
         #     print(f"file: {ind}; batch: {n}")
@@ -275,6 +309,8 @@ if train_mode:
                     Y.append(torch.from_numpy(image_y))
 
                 x = torch.stack(x, dim=0)
+                x = (x - mean[None, :, None, None]) / std[None, :, None, None]
+
         #     print(f"xshape : {x.shape}")
                 x = x.to(torch.float32)
                 x = x.to(device)
@@ -331,11 +367,12 @@ if train_mode:
             # Cuda cleanup
                 del x
                 del Y
-
+            # clean up files streamed to memory
+            del date_data
 
 # In[ ]:
 
-    # torch.save(model.state_dict(), 'model_weights.pth')
+    torch.save(model.state_dict(), 'model_weights.pth')
 
 
     avg_loss = total_loss / total_pixels
