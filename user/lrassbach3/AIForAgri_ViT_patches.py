@@ -44,7 +44,7 @@ test_subset_path = root_path + "val.csv"
 val_subset_path = root_path + "test.csv"
 train_df = pd.read_csv(train_subset_path)
 test_df = pd.read_csv(test_subset_path)
-val_df = pd.read_csv() #TODO
+#val_df = pd.read_csv() #TODO
 
 date1 = metadata.iloc[0]
 
@@ -241,6 +241,7 @@ class SpectralViTPixel(nn.Module):
         )
 
     def forward(self, x):
+        x = x.mean(dim=1)   # (B, C, H, W)
         B, C, H, W = x.shape
         patch = self.patch
 
@@ -307,14 +308,12 @@ criterion = nn.CrossEntropyLoss()
 
 # get mean for normalization
 
-x = []
-Y = []
 print("computing mean & std")
 
 channel_sum = None
 channel_sq_sum = None
 pixel_count = 0
-
+'''
 for ind in trange(34, desc='files', leave=False):
     date = metadata.iloc[ind]
     date_data = rasterio.open(root_path + date["filename"])
@@ -352,7 +351,7 @@ std = torch.sqrt(channel_sq_sum / pixel_count - mean ** 2)
 
 print("mean:", mean)
 print("std:", std)
-
+'''
 
 total_loss = 0
 total_correct = 0
@@ -367,18 +366,18 @@ test = False
 if train_mode:
     print("train mode")
 
-    dataset = PotentialDataset(root_path, "viticulture", "val")
+    dataset = PotentialDataset(root_path, "viticulture", "train")
     dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
     iterator = iter(dataloader)
     epochs = 80
     for i in trange(epochs, desc='epochs'):
-        for x, y in dataloader:
+        for x, y, pid in dataloader:
             # uncomment for normalization
             # x = (x - mean[None, :, None, None]) / std[None, :, None, None]
 
     #     print(f"xshape : {x.shape}")
             x = x.to(device)
-            Y = Y.to(device)
+            Y = y.to(device)
 
     #     valid_ratio = (labels != 0).float().mean().item() 
     #     print("Valid pixel ratio:", valid_ratio)
@@ -396,6 +395,12 @@ if train_mode:
                 .reshape(B, grid_H, grid_W, -1)
                 .mode(dim=-1).values
             )  # (B, grid_H, grid_W)
+            mask = patch_labels != 0
+            patch_labels = patch_labels[mask] - 1
+            logits = logits.permute(0, 2, 3, 1).reshape(-1, K)
+            logits = logits[mask.reshape(-1)]
+            patch_labels = patch_labels.long()
+
 
             # Compute loss
             loss = criterion(logits, patch_labels)
