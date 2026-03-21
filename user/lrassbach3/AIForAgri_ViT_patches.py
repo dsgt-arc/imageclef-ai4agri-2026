@@ -18,6 +18,8 @@
 # %pip install --upgrade pandas scipy matplotlib numpy
 # %pip install --upgrade python-dateutil pytz
 
+from tkinter import Image
+
 import pandas as pd
 import numpy as np
 import sys
@@ -39,9 +41,10 @@ from rasterio.windows import Window
 
 train_subset_path = root_path + "train.csv"
 test_subset_path = root_path + "val.csv"
+val_subset_path = root_path + "test.csv"
 train_df = pd.read_csv(train_subset_path)
 test_df = pd.read_csv(test_subset_path)
-
+val_df = pd.read_csv() #TODO
 
 date1 = metadata.iloc[0]
 
@@ -92,42 +95,105 @@ import torch.nn as nn
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
+from torch.utils.data import DataLoader
+import os
+from torch.utils.data import Dataset
+import pandas as pd
+import numpy as np
+import rasterio
+from rasterio.windows import Window
+
+class PotentialDataset(Dataset):
+  """
+  A PyTorch Dataset class for loading AgriPotential image patches
+  and corresponding crop type labels, organized based on patch metadata.
+
+  The dataset expects a root directory structure containing:
+  - 'metadata.csv': A file listing Sentinel-2 file paths.
+  - '{subset}.csv': A file defining the patch coordinates (row, col, patch_size)
+                    for the specific subset (e.g., 'train', 'val', 'test').
+  - '{crop_type}.tif': A GeoTIFF file containing the ground truth crop type
+                       labels.
+  - 34 Sentinel-2 GeoTIFF files referenced in 'metadata.csv'.
+
+  Attributes:
+    root_url (str): The root directory containing the data files.
+                    For online loading use https://huggingface.co/datasets/m-sakka/agripotential/resolve/main/
+    crop_type (str): Identifier for the label GeoTIFF file (e.g., 'crop_labels').
+    subset (str): Identifier for the patch definition CSV file (e.g., 'train').
+    metadata_df (pd.DataFrame): DataFrame loaded from 'metadata.csv' containing
+                                Sentinel-2 file information.
+    patch_df (pd.DataFrame): DataFrame loaded from '{subset}.csv' containing
+                             patch details (row, col, patch_size).
+    label_path (str): Full path to the crop type label GeoTIFF file.
+    sentinel2_paths (list): List of full paths to the Sentinel-2 GeoTIFF files.
+  """
+  def __init__(self, root_url, crop_type, subset):
+    """
+    Initializes the dataset
+
+    Args:
+      root_url (str): The base directory path for the dataset.
+      crop_type (str): The name of the label file (e.g., "viticulture", "market", "field")
+      subset (str): The name of the subset (e.g., "train", "val", "test")
+    """
+    super().__init__()
+    self.root_url = root_url
+    self.subset = subset
+
+    # Load metadata and patch information
+    self.metadata_df = pd.read_csv(self.root_url + "metadata.csv")
+    self.patch_df = pd.read_csv(self.root_url + subset +".csv")
+
+    # Define paths
+    self.label_path = self.root_url + crop_type + ".tif"
+    self.sentinel2_paths = []
+    for f in self.metadata_df["filename"]:
+      self.sentinel2_paths.append(os.path.join(self.root_url, f))
+
+  def __len__(self):
+    """
+    Returns the total number of patches in the dataset subset.
+
+    Returns:
+      int: The number of rows in self.patch_df.
+    """
+    return len(self.patch_df)
+
+  def __getitem__(self, idx):
+    """
+    Retrieves the Sentinel-2 data, corresponding label, and patch ID for a given index.
+
+    The Sentinel-2 data is stacked across the time dimension (i.e., multiple GeoTIFFs),
+    and then the bands from each image are implicitly stacked resulting in a
+    shape of (34 Timeframes, 10 Bands, PatchSize, PatchSize)
+
+    Args:
+      idx (int): The index of the patch to retrieve (from 0 to len-1).
+
+    Returns:
+      tuple: A tuple containing:
+        - data (np.ndarray): The stacked Sentinel-2 patch data. Shape: (34, 10, P, P) where P is patch_size.
+        - label (np.ndarray): The corresponding crop type label patch. Shape: (P, P).
+        - patch_id (int or str): The unique identifier for the patch.
+    """
+    patch = self.patch_df.iloc[idx]
+    patch_row = patch["row"]
+    patch_col = patch["col"]
+    patch_size = patch["patch_size"]
+    patch_id = patch["patch_id"]
+
+    data = np.empty((34, 10, patch_size, patch_size), dtype=np.float32)
+    window = Window(patch_col, patch_row, patch_size, patch_size)
+    for i, fp in enumerate(self.sentinel2_paths):
+      with rasterio.open(fp) as src:
+        data[i] = src.read(window=window)
+
+    label = rasterio.open(self.label_path).read(window=window)[0]
+
+    return data, label, patch_id
 
 # In[ ]:
-
-class HybridSpectralEncoder(nn.Module):
-    def __init__(self, num_bands, d_model):
-        super().__init__()
-
-        # 1D CNN over spectral dimension
-        self.cnn = nn.Sequential(
-            nn.Conv1d(1, 32, kernel_size=7, padding=3),
-            nn.GELU(),
-            nn.Conv1d(32, 64, kernel_size=5, padding=2),
-            nn.GELU(),
-            nn.Conv1d(64, 64, kernel_size=3, padding=1),
-            nn.GELU()
-        )
-
-        # MLP for global nonlinear mixing
-        self.mlp = nn.Sequential(
-            nn.Linear(64 * num_bands, 256),
-            nn.GELU(),
-            nn.Linear(256, d_model)
-        )
-
-    def forward(self, x):
-        # x: (B, HW, C)
-        B, N, C = x.shape
-
-        # CNN expects (B*N, 1, C)
-        x = x.reshape(B * N, 1, C)
-
-        x = self.cnn(x)              # (B*N, 64, C)
-        x = x.flatten(1)             # (B*N, 64*C)
-        x = self.mlp(x)              # (B*N, d_model)
-
-        return x.reshape(B, N, -1)
 
 class SpectralViTPixel(nn.Module):
     def __init__(self, num_bands, num_classes,
@@ -287,34 +353,6 @@ std = torch.sqrt(channel_sq_sum / pixel_count - mean ** 2)
 print("mean:", mean)
 print("std:", std)
 
-'''
-for ind in trange(34, desc='files', leave=False):
-        # for ind in range(34):
-        #   print(f"file: {ind}")
-            date = metadata.iloc[ind]
-            date_data = rasterio.open(root_path+date["filename"])
-            # TODO - this is majorly undertrained. instead of 800 rows of data, there are 6330
-            batch_size = 16
-        # 252 * 3 is max training
-            for n in range(395):
-        #     print(f"file: {ind}; batch: {n}")
-                for i in range(batch_size):
-                    index = i + (n * batch_size)
-                # print(f"index: {index}")
-                    patch_row = train_df.iloc[index]["row"]
-                    patch_col = train_df.iloc[index]["col"]
-                    patch_size = train_df.iloc[index]["patch_size"]
-                    patch_id = train_df.iloc[index]["patch_id"]
-                    image_x = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-                    x.append(torch.from_numpy(image_x))
-                    image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-                    Y.append(torch.from_numpy(image_y))
-            del date_data
-x = torch.stack(x, dim=0)
-x = x.to(torch.float32)
-mean = x.mean(dim=(0,2,3))   # shape (C,)
-std  = x.std(dim=(0,2,3))    # shape (C,)
-'''
 
 total_loss = 0
 total_correct = 0
@@ -324,104 +362,67 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-train_mode = False
+train_mode = True
+test = False
 if train_mode:
     print("train mode")
+
+    dataset = PotentialDataset(root_path, "viticulture", "val")
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
+    iterator = iter(dataloader)
     epochs = 80
     for i in trange(epochs, desc='epochs'):
-        for ind in trange(34, desc='files', leave=False):
-        # for ind in range(34):
-        #   print(f"file: {ind}")
-            date = metadata.iloc[ind]
-            date_data = rasterio.open(root_path+date["filename"])
-            batch_size = 16
-            for n in range(395):
-                x = []
-                Y = []
-        #     print(f"file: {ind}; batch: {n}")
-                for i in range(batch_size):
-                    index = i + (n * batch_size)
-                # print(f"index: {index}")
-                    patch_row = train_df.iloc[index]["row"]
-                    patch_col = train_df.iloc[index]["col"]
-                    patch_size = train_df.iloc[index]["patch_size"]
-                    patch_id = train_df.iloc[index]["patch_id"]
-                    image_x = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-                    x.append(torch.from_numpy(image_x))
-                    image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-                    Y.append(torch.from_numpy(image_y))
+        for x, y in dataloader:
+            # uncomment for normalization
+            # x = (x - mean[None, :, None, None]) / std[None, :, None, None]
 
-                x = torch.stack(x, dim=0)
-                x = (x - mean[None, :, None, None]) / std[None, :, None, None]
+    #     print(f"xshape : {x.shape}")
+            x = x.to(device)
+            Y = Y.to(device)
 
-        #     print(f"xshape : {x.shape}")
-                x = x.to(torch.float32)
-                x = x.to(device)
+    #     valid_ratio = (labels != 0).float().mean().item() 
+    #     print("Valid pixel ratio:", valid_ratio)
+            optimizer.zero_grad()
+        # run forward pass on model
+            logits = model.forward(x)
+        # loss
+            B, K, grid_H, grid_W = logits.shape
+            patch = model.patch
 
-                Y = torch.stack(Y, dim=0)
-                Y = Y.to(torch.int64)
-                Y = Y.to(device)
+            # y: (B, H, W)
+            patch_labels = (
+                y.unfold(1, patch, patch)
+                .unfold(2, patch, patch)
+                .reshape(B, grid_H, grid_W, -1)
+                .mode(dim=-1).values
+            )  # (B, grid_H, grid_W)
 
-        #     valid_ratio = (labels != 0).float().mean().item() 
-        #     print("Valid pixel ratio:", valid_ratio)
-            
-            # run forward pass on model
-                logits = model.forward(x)
-            # loss
-                B, K, grid_H, grid_W = logits.shape
-                patch = model.patch
-                H = W = grid_H * patch # 128
-            
-                labels = Y.reshape(B, H, W)
-            
-                patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch) 
-            # (B, grid_H, grid_W, patch, patch) # pick top-left pixel (or majority vote) 
-                patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1)
-                patch_labels = patch_labels.mode(dim=-1).values
-            # (B, grid_H, grid_W) 
-            # --------------------------------------- 
-            # 2. Build patch-level mask 
-            # --------------------------------------- 
-                patch_mask = patch_labels != 0 
-            # same shape as patch grid # --------------------------------------- 
-            #3. Flatten logits and labels # --------------------------------------- 
-                logits = logits.permute(0, 2, 3, 1).reshape(-1, K) 
-                patch_labels = patch_labels.reshape(-1) 
-                patch_mask = patch_mask.reshape(-1) 
-            # --------------------------------------- # 4. Apply mask # --------------------------------------- 
-                logits = logits[patch_mask] 
-                patch_labels = patch_labels[patch_mask] # --------------------------------------- 
-            # 5. Shift labels if needed # --------------------------------------- 
-                patch_labels = patch_labels - 1
-        
-                loss = criterion(logits, patch_labels).to(device)
+            # Compute loss
+            loss = criterion(logits, patch_labels)
 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                total_loss += loss.item() * patch_labels.numel()
+            loss.backward()
+            optimizer.step()
 
             # Accuracy
-                preds = logits.argmax(dim=1)
-                total_correct += (preds == patch_labels).sum().item()
-                total_pixels+= patch_labels.numel()
+            preds = logits.argmax(dim=1)  # (B, grid_H, grid_W)
+            total_correct += (preds == patch_labels).sum().item()
+            total_pixels  += patch_labels.numel()
+            total_loss    += loss.item() * patch_labels.numel()
 
-            # Cuda cleanup
-                del x
-                del Y
-            # clean up files streamed to memory
-            date_data.close()
+        # Cuda cleanup
+            del x
+            del Y
+
 
 # In[ ]:
 
-    torch.save(model.state_dict(), 'model_weights.pth')
+    torch.save(model.state_dict(), 'model_weights_viaDL.pth')
 
 
     avg_loss = total_loss / total_pixels
     accuracy = total_correct / total_pixels
     print(f"training avg_loss: {avg_loss}; training accuracy: {accuracy}")
-else:
+elif test:
     total_loss = 0
     total_correct = 0
     total_pixels = 0
@@ -460,16 +461,11 @@ else:
                 Y = Y.to(torch.int64)
                 Y = Y.to(device)
                 logits = model.forward(x) 
-        # (B, K, grid_H, grid_W) 
-        # --- same patch label logic as training --- 
+                # (B, K, grid_H, grid_W) 
                 B, K, grid_H, grid_W = logits.shape 
                 patch = model.patch
-                #print(f"patch: {patch}")
-                #print(f"logits: {logits.shape}")
                 H = W = grid_H * patch 
-                #labels = Y.reshape(B, H, W) 
                 labels = Y.squeeze(1)
-                #print(f"labels: {labels.shape}")
                 patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch)
                 patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1).mode(dim=-1).values
                 
@@ -493,3 +489,5 @@ else:
         avg_loss = total_loss / total_pixels
         accuracy = total_correct / total_pixels
         print(f"test avg_loss: {avg_loss}; test accuracy: {accuracy}")
+else:
+    print("error - test or train not selected")
