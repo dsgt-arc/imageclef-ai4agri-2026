@@ -324,7 +324,7 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-train_mode = True
+train_mode = False
 if train_mode:
     print("train mode")
     epochs = 80
@@ -425,7 +425,7 @@ else:
     total_loss = 0
     total_correct = 0
     total_pixels = 0
-    state_dict = torch.load('model_weights.pth')
+    state_dict = torch.load('model_weights_full_norm.pth')
     model.load_state_dict(state_dict) 
     print("test mode")
     with torch.no_grad():
@@ -451,6 +451,7 @@ else:
                     Y.append(torch.from_numpy(image_y))
                 
                 x = torch.stack(x, dim=0)
+                x = (x - mean[None, :, None, None]) / std[None, :, None, None]
                 #print(f"xshape : {x.shape}")
                 x = x.to(torch.float32)
                 x = x.to(device)
