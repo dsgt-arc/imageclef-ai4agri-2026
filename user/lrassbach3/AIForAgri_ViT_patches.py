@@ -18,6 +18,7 @@
 # %pip install --upgrade pandas scipy matplotlib numpy
 # %pip install --upgrade python-dateutil pytz
 
+import time
 from tkinter import Image
 
 import pandas as pd
@@ -185,11 +186,23 @@ class PotentialDataset(Dataset):
 
     data = np.empty((34, 10, patch_size, patch_size), dtype=np.float32)
     window = Window(patch_col, patch_row, patch_size, patch_size)
+    def safe_read(src, window, retries=3):
+        for attempt in range(retries):
+            try:
+                return src.read(window=window)
+            except Exception as e:
+                if attempt == retries - 1:
+                    raise e
+                print(f"[WARN] Read failed, retrying ({attempt+1}/{retries})...")
+                time.sleep(0.1)
+
+    label = None
     for i, fp in enumerate(self.sentinel2_paths):
       with rasterio.open(fp) as src:
-        data[i] = src.read(window=window)
-
-    label = rasterio.open(self.label_path).read(window=window)[0]
+        data[i] = safe_read(src,window=window)
+    with rasterio.open(self.label_path) as src:
+        label = safe_read(src,window)
+        label = label[0]
 
     return data, label, patch_id
 
