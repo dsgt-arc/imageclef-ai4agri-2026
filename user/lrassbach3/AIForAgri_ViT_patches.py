@@ -102,7 +102,6 @@ from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
 
-# TODO create a script to download all files to scratch; repoint from URL to local file stored
 class PotentialDataset(Dataset):
   """
   A PyTorch Dataset class for loading AgriPotential image patches
@@ -128,7 +127,7 @@ class PotentialDataset(Dataset):
     label_path (str): Full path to the crop type label GeoTIFF file.
     sentinel2_paths (list): List of full paths to the Sentinel-2 GeoTIFF files.
   """
-  def __init__(self, root_url, crop_type, subset):
+  def __init__(self, root_url, crop_type, subset, localpath="$HOME/scratch/lrassbach3/agri_files/tif"):
     """
     Initializes the dataset
 
@@ -140,6 +139,7 @@ class PotentialDataset(Dataset):
     super().__init__()
     self.root_url = root_url
     self.subset = subset
+    localpath = os.path.expandvars(localpath)
 
     # Load metadata and patch information
     self.metadata_df = pd.read_csv(self.root_url + "metadata.csv")
@@ -149,7 +149,7 @@ class PotentialDataset(Dataset):
     self.label_path = self.root_url + crop_type + ".tif"
     self.sentinel2_paths = []
     for f in self.metadata_df["filename"]:
-      self.sentinel2_paths.append(os.path.join(self.root_url, f))
+      self.sentinel2_paths.append(os.path.join(localpath, f))
 
   def __len__(self):
     """
