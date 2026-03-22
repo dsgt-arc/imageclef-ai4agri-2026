@@ -127,7 +127,7 @@ class PotentialDataset(Dataset):
     label_path (str): Full path to the crop type label GeoTIFF file.
     sentinel2_paths (list): List of full paths to the Sentinel-2 GeoTIFF files.
   """
-  def __init__(self, root_url, crop_type, subset, localpath="$HOME/scratch/lrassbach3/agri_files/tif"):
+  def __init__(self, root_url, crop_type, subset, localpath="$HOME/scratch/lrassbach3/agri_files/tif/"):
     """
     Initializes the dataset
 
@@ -146,7 +146,7 @@ class PotentialDataset(Dataset):
     self.patch_df = pd.read_csv(self.root_url + subset +".csv")
 
     # Define paths
-    self.label_path = self.root_url + crop_type + ".tif"
+    self.label_path = localpath + crop_type + ".tif"
     self.sentinel2_paths = []
     for f in self.metadata_df["filename"]:
       self.sentinel2_paths.append(os.path.join(localpath, f))
