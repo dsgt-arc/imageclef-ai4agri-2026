@@ -101,9 +101,8 @@ import os
 from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
-import rasterio
-from rasterio.windows import Window
 
+# TODO create a script to download all files to scratch; repoint from URL to local file stored
 class PotentialDataset(Dataset):
   """
   A PyTorch Dataset class for loading AgriPotential image patches
@@ -409,6 +408,8 @@ if train_mode:
                 .mode(dim=-1).values
             )  # (B, grid_H, grid_W)
             mask = patch_labels != 0
+            patch_labels = patch_labels.to(device)
+            mask = mask.to(device)
             patch_labels = patch_labels[mask] - 1
             logits = logits.permute(0, 2, 3, 1).reshape(-1, K)
             logits = logits[mask.reshape(-1)]
@@ -420,7 +421,6 @@ if train_mode:
 
             loss.backward()
             optimizer.step()
-
             # Accuracy
             preds = logits.argmax(dim=1)  # (B, grid_H, grid_W)
             total_correct += (preds == patch_labels).sum().item()
