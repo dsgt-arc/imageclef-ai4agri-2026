@@ -447,64 +447,40 @@ elif test:
     total_pixels = 0
     state_dict = torch.load('model_weights_viaDL.pth')
     model.load_state_dict(state_dict) 
+    dataset = PotentialDataset(root_path, "viticulture", "train")
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
+    iterator = iter(dataloader)
     print("test mode")
     with torch.no_grad():
-        for ind in trange(34, desc='files', leave=False):
-            date = metadata.iloc[ind]
-            date_data = rasterio.open(root_path+date["filename"])
-            batch_size = 16 # TODO these will need to be revisited
-            # 252 * 3 is max training
-            for n in range(48):
-                x = []
-                Y = []
-      #     print(f"file: {ind}; batch: {n}")
-                for i in range(batch_size):
-                    index = i + (n * batch_size)
-                 # print(f"index: {index}")
-                    patch_row = test_df.iloc[index]["row"]
-                    patch_col = test_df.iloc[index]["col"]
-                    patch_size = test_df.iloc[index]["patch_size"]
-                    patch_id = test_df.iloc[index]["patch_id"]
-                    image_x = date_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-                    x.append(torch.from_numpy(image_x))
-                    image_y = viticulture_label_data.read(window=Window(patch_col, patch_row, patch_size, patch_size))
-                    Y.append(torch.from_numpy(image_y))
-                
-                x = torch.stack(x, dim=0)
-                x = (x - mean[None, :, None, None]) / std[None, :, None, None]
-                #print(f"xshape : {x.shape}")
-                x = x.to(torch.float32)
-                x = x.to(device)
-                Y = torch.stack(Y, dim=0)
-                #print(f"yshape : {Y.shape}")
-                Y = Y.to(torch.int64)
-                Y = Y.to(device)
-                logits = model.forward(x) 
-                # (B, K, grid_H, grid_W) 
-                B, K, grid_H, grid_W = logits.shape 
-                patch = model.patch
-                H = W = grid_H * patch 
-                labels = Y.squeeze(1)
-                patch_labels = labels.unfold(1, patch, patch).unfold(2, patch, patch)
-                patch_labels = patch_labels.reshape(B, grid_H, grid_W, -1).mode(dim=-1).values
-                
-                patch_mask = patch_labels != 0
+        for x, y, pid in dataloader:
+            x = x.to(device)
+            Y = y.to(device)
+            logits = model.forward(x) 
+            # (B, K, grid_H, grid_W) 
+            B, K, grid_H, grid_W = logits.shape
+            patch = model.patch
 
-                logits = logits.permute(0,2,3,1).reshape(-1, K) 
-                patch_labels = patch_labels.reshape(-1) 
-                patch_mask = patch_mask.reshape(-1)
-                
-                logits = logits[patch_mask]
-                patch_labels = patch_labels[patch_mask]
+            # y: (B, H, W)
+            patch_labels = (
+                y.unfold(1, patch, patch)
+                .unfold(2, patch, patch)
+                .reshape(B, grid_H, grid_W, -1)
+                .mode(dim=-1).values
+            )  # (B, grid_H, grid_W)
+            mask = patch_labels != 0
+            patch_labels = patch_labels.to(device)
+            mask = mask.to(device)
+            patch_labels = patch_labels[mask] - 1
+            logits = logits.permute(0, 2, 3, 1).reshape(-1, K)
+            logits = logits[mask.reshape(-1)]
+            patch_labels = patch_labels.long()
+            
+            preds = logits.argmax(dim=1) 
+            total_correct += (preds == patch_labels).sum().item() 
+            total_pixels += patch_labels.numel()
 
-                patch_labels = patch_labels - 1
-
-                preds = logits.argmax(dim=1) 
-                total_correct += (preds == patch_labels).sum().item() 
-                total_pixels += patch_labels.numel()
-
-                del x
-                del Y
+            del x
+            del Y
         avg_loss = total_loss / total_pixels
         accuracy = total_correct / total_pixels
         print(f"test avg_loss: {avg_loss}; test accuracy: {accuracy}")
