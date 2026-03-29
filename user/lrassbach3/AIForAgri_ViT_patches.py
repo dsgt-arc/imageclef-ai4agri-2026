@@ -447,7 +447,7 @@ elif test:
     total_pixels = 0
     state_dict = torch.load('model_weights_viaDL.pth')
     model.load_state_dict(state_dict) 
-    dataset = PotentialDataset(root_path, "viticulture", "train")
+    dataset = PotentialDataset(root_path, "viticulture", "val")
     dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
     iterator = iter(dataloader)
     print("test mode")
