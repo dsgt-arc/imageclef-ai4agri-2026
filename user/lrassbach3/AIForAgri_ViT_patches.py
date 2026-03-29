@@ -127,7 +127,7 @@ class PotentialDataset(Dataset):
     label_path (str): Full path to the crop type label GeoTIFF file.
     sentinel2_paths (list): List of full paths to the Sentinel-2 GeoTIFF files.
   """
-  def __init__(self, root_url, crop_type, subset, localpath="$HOME/scratch/lrassbach3/agri_files/tif/"):
+  def __init__(self, root_url, crop_type, subset, localpath="$HOME/scratch/lrassbach3/agri_files/tif/agripotential/"):
     """
     Initializes the dataset
 
@@ -373,16 +373,17 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-train_mode = True
-test = False
+train_mode = False
+test = True
 if train_mode:
     print("train mode")
 
     dataset = PotentialDataset(root_path, "viticulture", "train")
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
     iterator = iter(dataloader)
     epochs = 80
     for i in trange(epochs, desc='epochs'):
+        print(f"epoch: {i}")
         for x, y, pid in dataloader:
             # uncomment for normalization
             # x = (x - mean[None, :, None, None]) / std[None, :, None, None]
@@ -444,7 +445,7 @@ elif test:
     total_loss = 0
     total_correct = 0
     total_pixels = 0
-    state_dict = torch.load('model_weights_full_norm.pth')
+    state_dict = torch.load('model_weights_viaDL.pth')
     model.load_state_dict(state_dict) 
     print("test mode")
     with torch.no_grad():
