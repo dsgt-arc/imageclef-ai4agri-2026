@@ -496,8 +496,8 @@ elif val:
     dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
     iterator = iter(dataloader)
     print("val mode")
-    output_dir = os.path.expandvars("$HOME/scratch/agripotential/submissions")
-    # TODO add here the directory creation 
+    output_dir = os.path.expandvars("$HOME/scratch/lrassbach3/agripotential/submissions")
+    os.makedirs(f"{output_dir}", exist_ok=True)
     count = 0
 
     with torch.no_grad():
@@ -539,3 +539,4 @@ elif val:
                 zf.write(os.path.join(output_dir, fname), fname)
 
     print(f"Saved {count} predictions → {zip_path}")
+    print(f"saved to {output_dir}")
