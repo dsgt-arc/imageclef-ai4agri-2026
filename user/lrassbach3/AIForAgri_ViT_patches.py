@@ -20,6 +20,7 @@
 
 import time
 from tkinter import Image
+import zipfile
 
 import pandas as pd
 import numpy as np
@@ -374,7 +375,8 @@ size = 800
 # batch size of 1
 # for iter in range(size):
 train_mode = False
-test = True
+test = False
+val = True
 if train_mode:
     print("train mode")
 
@@ -484,5 +486,56 @@ elif test:
         avg_loss = total_loss / total_pixels
         accuracy = total_correct / total_pixels
         print(f"test avg_loss: {avg_loss}; test accuracy: {accuracy}")
-else:
-    print("error - test or train not selected")
+elif val:
+    total_loss = 0
+    total_correct = 0
+    total_pixels = 0
+    state_dict = torch.load('model_weights_viaDL.pth')
+    model.load_state_dict(state_dict) 
+    dataset = PotentialDataset(root_path, "viticulture", "test")
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
+    iterator = iter(dataloader)
+    print("val mode")
+    output_dir = os.path.expandvars("$HOME/scratch/agripotential/submissions")
+    # TODO add here the directory creation 
+    count = 0
+
+    with torch.no_grad():
+        for x, y, pid in dataloader:
+            x = x.to(device)
+            Y = y.to(device)
+            logits = model.forward(x) 
+            # (B, K, grid_H, grid_W) 
+            B, K, grid_H, grid_W = logits.shape
+            patch = model.patch
+
+            # y: (B, H, W)
+            patch_labels = (
+                y.unfold(1, patch, patch)
+                .unfold(2, patch, patch)
+                .reshape(B, grid_H, grid_W, -1)
+                .mode(dim=-1).values
+            )  # (B, grid_H, grid_W)
+            mask = patch_labels != 0
+            patch_labels = patch_labels.to(device)
+            mask = mask.to(device)
+            patch_labels = patch_labels[mask] - 1
+            logits = logits.permute(0, 2, 3, 1).reshape(-1, K)
+            logits = logits[mask.reshape(-1)]
+            patch_labels = patch_labels.long()
+            
+            preds = logits.argmax(dim=1) + 1
+            
+            for pred, pid_ in zip(preds.cpu().numpy(), pid):
+                img = Image.fromarray(pred.astype(np.uint8), mode='L')
+                img.save(os.path.join(output_dir, f"{pid_}.png"))
+                count += 1
+
+        
+    zip_path = f"{output_dir}.zip"
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for fname in sorted(os.listdir(output_dir)):
+            if fname.endswith('.png'):
+                zf.write(os.path.join(output_dir, fname), fname)
+
+    print(f"Saved {count} predictions → {zip_path}")
