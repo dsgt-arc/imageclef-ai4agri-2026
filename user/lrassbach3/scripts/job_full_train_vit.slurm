@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=vit_80ep_rtx6000_60hl
+#SBATCH --job-name=vit_80ep_rtx6000_nogs
 #SBATCH --account=paceship-clef2026_img_ai4agri
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64gb
-#SBATCH --time=12:00:00
+#SBATCH --time=64:00:00
 #SBATCH --constraint=gpu-rtxpro-blackwell
 #SBATCH --gres=gpu:8    
 #SBATCH --qos=inferno

@@ -257,7 +257,6 @@ class SpectralViTPixel(nn.Module):
         )
 
     def forward(self, x):
-        x = x.mean(dim=1)   # (B, C, H, W)
         B, C, H, W = x.shape
         patch = self.patch
 
