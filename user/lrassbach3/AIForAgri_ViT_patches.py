@@ -19,8 +19,11 @@
 # %pip install --upgrade python-dateutil pytz
 
 import time
-from tkinter import Image
 import zipfile
+
+from PIL import Image
+
+
 
 import pandas as pd
 import numpy as np
@@ -151,7 +154,7 @@ class PotentialDataset(Dataset):
     self.sentinel2_paths = []
     for f in self.metadata_df["filename"]:
       self.sentinel2_paths.append(os.path.join(localpath, f))
-
+    print("dataloader init done")
   def __len__(self):
     """
     Returns the total number of patches in the dataset subset.
@@ -502,6 +505,7 @@ elif val:
 
     with torch.no_grad():
         for x, _, pid in dataloader:   # y is unused for validation
+            print("processing iteration")
             x = x.to(device)
 
             logits = model.forward(x)   # (B, K, grid_H, grid_W)
@@ -510,7 +514,8 @@ elif val:
 
             # Patch-level predictions
             preds = logits.argmax(dim=1)   # (B, grid_H, grid_W)
-
+            print("min pred:", preds.min().item())
+            print("max pred:", preds.max().item())
             # Convert patch predictions → pixel predictions
             # Repeat each patch prediction into a patch x patch block
             preds = preds.unsqueeze(-1).unsqueeze(-1)              # (B, grid_H, grid_W, 1, 1)
