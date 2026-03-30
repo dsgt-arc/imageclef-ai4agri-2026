@@ -501,31 +501,23 @@ elif val:
     count = 0
 
     with torch.no_grad():
-        for x, y, pid in dataloader:
+        for x, _, pid in dataloader:   # y is unused for validation
             x = x.to(device)
-            Y = y.to(device)
-            logits = model.forward(x) 
-            # (B, K, grid_H, grid_W) 
-            B, K, grid_H, grid_W = logits.shape
-            patch = model.patch
 
-            # y: (B, H, W)
-            patch_labels = (
-                y.unfold(1, patch, patch)
-                .unfold(2, patch, patch)
-                .reshape(B, grid_H, grid_W, -1)
-                .mode(dim=-1).values
-            )  # (B, grid_H, grid_W)
-            mask = patch_labels != 0
-            patch_labels = patch_labels.to(device)
-            mask = mask.to(device)
-            patch_labels = patch_labels[mask] - 1
-            logits = logits.permute(0, 2, 3, 1).reshape(-1, K)
-            logits = logits[mask.reshape(-1)]
-            patch_labels = patch_labels.long()
-            
-            preds = logits.argmax(dim=1) + 1
-            
+            logits = model.forward(x)   # (B, K, grid_H, grid_W)
+            B, K, grid_H, grid_W = logits.shape
+            patch = model.patch         # e.g., 4
+
+            # Patch-level predictions
+            preds = logits.argmax(dim=1)   # (B, grid_H, grid_W)
+
+            # Convert patch predictions → pixel predictions
+            # Repeat each patch prediction into a patch x patch block
+            preds = preds.unsqueeze(-1).unsqueeze(-1)              # (B, grid_H, grid_W, 1, 1)
+            preds = preds.repeat(1, 1, 1, patch, patch)            # (B, grid_H, grid_W, p, p)
+            preds = preds.reshape(B, grid_H * patch, grid_W * patch)  # (B, H, W)
+
+            # Save each prediction map
             for pred, pid_ in zip(preds.cpu().numpy(), pid):
                 img = Image.fromarray(pred.astype(np.uint8), mode='L')
                 img.save(os.path.join(output_dir, f"{pid_}.png"))
