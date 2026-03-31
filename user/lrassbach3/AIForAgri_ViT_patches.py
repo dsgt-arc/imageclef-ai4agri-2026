@@ -464,30 +464,43 @@ elif test:
     print("test mode")
     with torch.no_grad():
         for x, y, pid in dataloader:
+            # x: (B, T, C, H, W)
+            B, T, C, H, W = x.shape
             x = x.to(device)
             Y = y.to(device)
-            logits = model.forward(x) 
-            # (B, K, grid_H, grid_W) 
-            B, K, grid_H, grid_W = logits.shape
+
+            x_flat = x.reshape(B*T, C, H, W)
+
+            logits_flat = model.forward(x_flat)   # (B*T, K, grid_H, grid_W)
+            K = logits_flat.shape[1]
+            grid_H, grid_W = logits_flat.shape[2], logits_flat.shape[3]
             patch = model.patch
 
-            # y: (B, H, W)
+            logits = logits_flat.reshape(B, T, K, grid_H, grid_W)
+
+            preds = logits.argmax(dim=2)   # (B, T, grid_H, grid_W)
+
+            fused = torch.mode(preds, dim=1).values   # (B, grid_H, grid_W)
+
             patch_labels = (
-                y.unfold(1, patch, patch)
+                Y.unfold(1, patch, patch)
                 .unfold(2, patch, patch)
                 .reshape(B, grid_H, grid_W, -1)
                 .mode(dim=-1).values
             )  # (B, grid_H, grid_W)
+
             mask = patch_labels != 0
             patch_labels = patch_labels.to(device)
             mask = mask.to(device)
+
+            # Shift labels
             patch_labels = patch_labels[mask] - 1
-            logits = logits.permute(0, 2, 3, 1).reshape(-1, K)
-            logits = logits[mask.reshape(-1)]
-            patch_labels = patch_labels.long()
-            
-            preds = logits.argmax(dim=1) 
-            total_correct += (preds == patch_labels).sum().item() 
+
+            fused = fused.reshape(B, grid_H, grid_W)
+            fused = fused[mask]   # (num_valid_patches,)
+
+            preds = fused.long()
+            total_correct += (preds == patch_labels).sum().item()
             total_pixels += patch_labels.numel()
 
             del x
@@ -512,24 +525,32 @@ elif val:
     with torch.no_grad():
         for x, _, pid in dataloader:   # y is unused for validation
             print("processing iteration")
+
+            # x: (B, T, C, H, W)
+            B, T, C, H, W = x.shape
             x = x.to(device)
 
-            logits = model.forward(x)   # (B, K, grid_H, grid_W)
-            B, K, grid_H, grid_W = logits.shape
-            patch = model.patch         # e.g., 4
+            x_flat = x.reshape(B*T, C, H, W)
 
-            # Patch-level predictions
-            preds = logits.argmax(dim=1)   # (B, grid_H, grid_W)
-            print("min pred:", preds.min().item())
-            print("max pred:", preds.max().item())
-            # Convert patch predictions → pixel predictions
-            # Repeat each patch prediction into a patch x patch block
-            preds = preds.unsqueeze(-1).unsqueeze(-1)              # (B, grid_H, grid_W, 1, 1)
-            preds = preds.repeat(1, 1, 1, patch, patch)            # (B, grid_H, grid_W, p, p)
-            preds = preds.reshape(B, grid_H * patch, grid_W * patch)  # (B, H, W)
+            logits_flat = model.forward(x_flat)   # (B*T, K, grid_H, grid_W)
+            K = logits_flat.shape[1]
+            grid_H, grid_W = logits_flat.shape[2], logits_flat.shape[3]
+            patch = model.patch
 
-            # Save each prediction map
-            for pred, pid_ in zip(preds.cpu().numpy(), pid):
+            logits = logits_flat.reshape(B, T, K, grid_H, grid_W)
+
+            preds = logits.argmax(dim=2)   # (B, T, grid_H, grid_W)
+
+            fused = torch.mode(preds, dim=1).values   # (B, grid_H, grid_W)
+
+            print("min pred:", fused.min().item())
+            print("max pred:", fused.max().item())
+
+            fused = fused.unsqueeze(-1).unsqueeze(-1)          # (B, grid_H, grid_W, 1, 1)
+            fused = fused.repeat(1, 1, 1, patch, patch)        # (B, grid_H, grid_W, p, p)
+            fused = fused.reshape(B, grid_H * patch, grid_W * patch)  # (B, H, W)
+
+            for pred, pid_ in zip(fused.cpu().numpy(), pid):
                 img = Image.fromarray(pred.astype(np.uint8), mode='L')
                 img.save(os.path.join(output_dir, f"{pid_}.png"))
                 count += 1
