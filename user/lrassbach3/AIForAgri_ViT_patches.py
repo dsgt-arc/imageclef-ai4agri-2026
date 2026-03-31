@@ -376,9 +376,9 @@ total_pixels = 0
 size = 800
 # batch size of 1
 # for iter in range(size):
-train_mode = False
+train_mode = True
 test = False
-val = True
+val = False
 if train_mode:
     print("train mode")
 
@@ -391,8 +391,15 @@ if train_mode:
         for x, y, pid in dataloader:
             # uncomment for normalization
             # x = (x - mean[None, :, None, None]) / std[None, :, None, None]
+                # x: (B, T, C, H, W)
+            B, T, C, H, W = x.shape
 
-    #     print(f"xshape : {x.shape}")
+            # Flatten time into batch
+            x = x.reshape(B*T, C, H, W)
+
+            # Repeat labels for each timestamp
+            y = y.repeat_interleave(T, dim=0)
+            print(f"xshape : {x.shape}")
             x = x.to(device)
             Y = y.to(device)
 
