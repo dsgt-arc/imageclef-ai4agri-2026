@@ -154,6 +154,8 @@ class PotentialDataset(Dataset):
     self.sentinel2_paths = []
     for f in self.metadata_df["filename"]:
       self.sentinel2_paths.append(os.path.join(localpath, f))
+    self.mean = None
+    self.std = None
     print("dataloader init done")
   def __len__(self):
     """
@@ -206,9 +208,14 @@ class PotentialDataset(Dataset):
     with rasterio.open(self.label_path) as src:
         label = safe_read(src,window)
         label = label[0]
-
+    if self.mean is not None:
+        data = (data - self.mean.numpy()) / self.std.numpy()
+        print("std and mean used")
     return data, label, patch_id
-
+  
+  def set_mean_std(self, mean, std):
+      self.mean = mean
+      self.std = std
 # In[ ]:
 
 class SpectralViTPixel(nn.Module):
@@ -323,7 +330,6 @@ criterion = nn.CrossEntropyLoss()
 
 # get mean for normalization
 
-print("computing mean & std")
 
 channel_sum = None
 channel_sq_sum = None
@@ -368,6 +374,38 @@ print("mean:", mean)
 print("std:", std)
 '''
 
+def compute_mean_std(dataset):
+    # dataset[i] returns (x, y, pid)
+    # x is (T, C, H, W)
+
+    n = 0
+    channel_sum = 0
+    channel_sq_sum = 0
+
+    for x, _, _ in dataset:
+        # x: (T, C, H, W)
+        x = torch.tensor(x, dtype=torch.float32)
+
+        # collapse T, H, W into one dimension
+        x = x.reshape(-1, x.shape[1])   # (T*H*W, C)
+
+        channel_sum += x.sum(dim=0)
+        channel_sq_sum += (x ** 2).sum(dim=0)
+        n += x.shape[0]
+
+    mean = channel_sum / n
+    std = torch.sqrt(channel_sq_sum / n - mean**2)
+
+    return mean, std
+
+
+dataset = PotentialDataset(root_path, "viticulture", "train")
+print("computing mean & std")
+mean, std = compute_mean_std(dataset)
+dataset.set_mean_std(mean,std)
+print("done")
+dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
+
 total_loss = 0
 total_correct = 0
 total_pixels = 0
@@ -382,8 +420,7 @@ val = False
 if train_mode:
     print("train mode")
 
-    dataset = PotentialDataset(root_path, "viticulture", "train")
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
+
     iterator = iter(dataloader)
     epochs = 80
     for i in trange(epochs, desc='epochs'):
@@ -458,8 +495,6 @@ elif test:
     total_pixels = 0
     state_dict = torch.load('model_weights_viaDL.pth')
     model.load_state_dict(state_dict) 
-    dataset = PotentialDataset(root_path, "viticulture", "val")
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
     iterator = iter(dataloader)
     print("test mode")
     with torch.no_grad():
@@ -514,8 +549,6 @@ elif val:
     total_pixels = 0
     state_dict = torch.load('model_weights_viaDL.pth')
     model.load_state_dict(state_dict) 
-    dataset = PotentialDataset(root_path, "viticulture", "test")
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)
     iterator = iter(dataloader)
     print("val mode")
     output_dir = os.path.expandvars("$HOME/scratch/lrassbach3/agripotential/submissions")
