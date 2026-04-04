@@ -263,7 +263,7 @@ def main(cfg: Config, stage: int, ckpt_path: str | None):
         num_classes=cfg.num_classes,
         head_hidden_dim=cfg.head_hidden_dim,
         freeze_encoder=True,  # always start frozen; unfreeze in Stage 2
-        presto_path=cfg.presto_path,
+        presto_weights=cfg.presto_path,
     ).to(cfg.device)
 
     if ckpt_path:
