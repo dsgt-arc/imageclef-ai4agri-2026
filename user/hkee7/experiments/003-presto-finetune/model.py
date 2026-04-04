@@ -231,14 +231,31 @@ class PrestoOrdinal(nn.Module):
             chunk_ll = torch.zeros(chunk_size_real, 2, dtype=chunk_x.dtype, device=device)
 
             # 4. Pass through Transformer
-            chunk_embeds = self.encoder(
-                x=chunk_x,
-                dynamic_world=chunk_dw,
-                latlons=chunk_ll,
-                mask=None,
-                month=0,
-                eval_task=True,
-            )
+            if not self.freeze_encoder:
+                # Stage 2: Encoder is unfrozen. If we don't checkpoint, PyTorch will keep  
+                # enormous attention activation graphs across all chunks alive in VRAM 
+                # until loss.backward() completes. This explodes VRAM linearly with batch size.
+                # Checkpointing drops the graphs and perfectly flatlines VRAM to just 1 chunk!
+                chunk_x.requires_grad_(True)  # Force graph connection hook
+                chunk_embeds = torch.utils.checkpoint.checkpoint(
+                    self.encoder,
+                    chunk_x,
+                    chunk_dw,
+                    chunk_ll,
+                    None,  # mask
+                    0,     # month
+                    True,  # eval_task
+                    use_reentrant=False,
+                )
+            else:
+                chunk_embeds = self.encoder(
+                    x=chunk_x,
+                    dynamic_world=chunk_dw,
+                    latlons=chunk_ll,
+                    mask=None,
+                    month=0,
+                    eval_task=True,
+                )
             embeds_list.append(chunk_embeds)
             
         embeds = torch.cat(embeds_list, dim=0)     # (N, D)
