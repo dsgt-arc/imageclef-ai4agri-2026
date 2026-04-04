@@ -45,7 +45,7 @@ class Config:
     # ---- Misc ---------------------------------------------------------------
     seed: int = 42
     save_dir: str = "artifacts"
-    log_every: int = 20
+    log_every: int = 1
     device: str = "cuda"
     use_amp: bool = True
 
