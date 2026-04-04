@@ -146,6 +146,7 @@ class PrestoOrdinal(nn.Module):
     ):
         super().__init__()
         self.chunk_size = chunk_size
+        self.freeze_encoder = freeze_encoder
 
         # Import from the vendored single-file copy — zero package deps
         from single_file_presto import Presto
