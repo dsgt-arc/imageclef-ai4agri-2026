@@ -246,7 +246,7 @@ class PrestoOrdinal(nn.Module):
                     None,  # mask
                     0,     # month
                     True,  # eval_task
-                    use_reentrant=False,
+                    use_reentrant=True,
                 )
             else:
                 chunk_embeds = self.encoder(

@@ -29,8 +29,8 @@ class Config:
     stage2_lr: float = 5e-5  # lower LR for encoder weights
     stage2_head_lr: float = 5e-4  # higher LR for head
 
-    batch_size: int = 64  # Increased for massive VRAM (90GB Blackwell)
-    chunk_size: int = 16384  # max safe value before CUDA grid limit errors
+    batch_size: int = 4  # Lower physical batch size
+    chunk_size: int = 4096  # Backpropagation requires 4x more memory per chunk!
     weight_decay: float = 1e-4
     scheduler: str = "cosine"
     num_workers: int = 4
