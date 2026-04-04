@@ -10,7 +10,7 @@ dependencies = [
     "torch>=2.0.0",
     "numpy>=1.24.0",
     "polars>=1.38.1",
-    "tqdm>=4.65.0",
+    "tqdm>=4.64.1",   # floor matches Presto's pinned version
     "einops>=0.6.0",   # direct dep that Presto uses (we install presto --no-deps)
     "h5py>=3.6.0",
     # Presto installed from GitHub with no transitive deps (avoids earthengine/openmapflow)
@@ -32,8 +32,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["."]
 
-# Tell uv to install the presto git source without pulling its declared
-# install_requires (which includes earthengine-api, openmapflow, cropharvest).
-# We manually list the two deps we actually need (einops, h5py) above.
+# uv.sources: resolve presto from GitHub instead of PyPI.
 [tool.uv.sources]
 presto = { git = "https://github.com/nasaharvest/presto.git" }
+
+# uv.override-dependencies: break Presto's exact tqdm==4.64.1 pin.
+# Presto's setup.py pins tqdm==4.64.1; here we loosen it so uv can pick
+# any compatible tqdm >= 4.64.1 and satisfy both Presto and our own floor.
+[tool.uv]
+override-dependencies = [
+    "tqdm>=4.64.1",
+]
