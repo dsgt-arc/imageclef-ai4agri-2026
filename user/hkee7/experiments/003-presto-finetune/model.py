@@ -142,8 +142,10 @@ class PrestoOrdinal(nn.Module):
         head_hidden_dim: int = 64,
         freeze_encoder: bool = True,
         presto_weights: str | None = None,
+        chunk_size: int = 65536,
     ):
         super().__init__()
+        self.chunk_size = chunk_size
 
         # Import from the vendored single-file copy — zero package deps
         from single_file_presto import Presto
@@ -222,16 +224,14 @@ class PrestoOrdinal(nn.Module):
         ll = torch.zeros(N, 2, dtype=x_pix.dtype, device=device)     # dummy
 
         # Presto processes every pixel as an independent sequence.
-        # N = B*H*W can be massive (e.g. 16 * 64 * 64 = 65,536).
-        # Passing 65k sequences through a Transformer at once causes CUDA OOM.
-        # We chunk it (LayerNorm has no cross-batch dependence, so this is exact).
-        CHUNK_SIZE = 4096
+        # N = B*H*W can be massive.
+        # Chunking limits max attention footprint.
         embeds_list = []
-        for i in range(0, N, CHUNK_SIZE):
+        for i in range(0, N, self.chunk_size):
             chunk_embeds = self.encoder(
-                x=x_pix[i : i + CHUNK_SIZE],
-                dynamic_world=dw[i : i + CHUNK_SIZE],
-                latlons=ll[i : i + CHUNK_SIZE],
+                x=x_pix[i : i + self.chunk_size],
+                dynamic_world=dw[i : i + self.chunk_size],
+                latlons=ll[i : i + self.chunk_size],
                 mask=None,
                 month=0,
                 eval_task=True,
