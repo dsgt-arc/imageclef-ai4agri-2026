@@ -1,40 +1,139 @@
 """
 Presto-based model for AgriPotential pixel-level ordinal regression.
 
+Uses single_file_presto.py (vendored from nasaharvest/presto) to avoid
+installing the full presto package and its heavy research-pipeline deps
+(openmapflow, earthengine-api, cropharvest, …).
+
 Architecture:
     Input  [B, T, C, H, W]
-           ↓ reshape to pixels
-    Pixels [B·H·W, T, C]
-           ↓ Presto encoder
+           ↓ select S2 bands → map to Presto's 17-band layout
+    Pixels [B·H·W, T, 17]
+           ↓ Presto Encoder (eval_task=True)
     Embeds [B·H·W, D=128]
            ↓ reshape back to spatial
     Map    [B, D, H, W]
            ↓ lightweight Conv2d head
     Logits [B, K-1, H, W]  (K-1 ordinal thresholds)
+
+Band mapping
+------------
+Presto's BANDS_GROUPS_IDX expects up to 17 channels:
+    [0,1]      S1 (SAR) — we zero-fill (not available)
+    [2,3,4]    S2 RGB (B2, B3, B4)
+    [5,6,7]    S2 Red Edge (B5, B6, B7)
+    [8]        S2 NIR 10m (B8)
+    [9]        S2 NIR 20m (B8A)
+    [10,11]    S2 SWIR (B11, B12)
+    [12,13]    ERA5 — zero-fill
+    [14,15]    SRTM — zero-fill
+    [16]       NDVI — derived from B8, B4
+
+Our 10-band stack order (from precomputed tensors, standard ESA ordering):
+    Band index  ESA name  Presto slot
+    0           B2        2
+    1           B3        3
+    2           B4        4
+    3           B5        5
+    4           B6        6
+    5           B7        7
+    6           B8        8
+    7           B8A       9
+    8           B11       10
+    9           B12       11
 """
 
 from __future__ import annotations
 
+import os
+import urllib.request
+
 import torch
 import torch.nn as nn
+
+# ---------------------------------------------------------------------------
+# Pretrained weights
+# ---------------------------------------------------------------------------
+
+PRESTO_WEIGHTS_URL = (
+    "https://raw.githubusercontent.com/nasaharvest/presto/main/data/default_model.pt"
+)
+PRESTO_WEIGHTS_CACHE = os.path.join(
+    os.path.expanduser("~"), ".cache", "presto", "default_model.pt"
+)
+
+
+
+def _ensure_weights(path: str | None) -> str:
+    """Download pretrained weights if not cached; return local path."""
+    target = path or PRESTO_WEIGHTS_CACHE
+    if not os.path.exists(target):
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        print(f"Downloading Presto weights → {target}")
+        urllib.request.urlretrieve(PRESTO_WEIGHTS_URL, target)
+        print("  done.")
+    return target
+
+
+# ---------------------------------------------------------------------------
+# Band-mapping helper
+# ---------------------------------------------------------------------------
+
+NUM_PRESTO_BANDS = 17  # Presto's full expected input width
+
+
+def _to_presto_bands(x: torch.Tensor) -> torch.Tensor:
+    """
+    Map our 10-band Sentinel-2 tensor to Presto's 17-band layout.
+
+    Args:
+        x: (N, T, 10) — our S2 bands [B2,B3,B4,B5,B6,B7,B8,B8A,B11,B12]
+
+    Returns:
+        (N, T, 17) with zeros for S1, ERA5, SRTM; NDVI derived from B8, B4.
+    """
+    N, T, _ = x.shape
+    out = torch.zeros(N, T, NUM_PRESTO_BANDS, dtype=x.dtype, device=x.device)
+
+    # S2 optical bands
+    out[:, :, 2]  = x[:, :, 0]   # B2  → S2_RGB[0]
+    out[:, :, 3]  = x[:, :, 1]   # B3  → S2_RGB[1]
+    out[:, :, 4]  = x[:, :, 2]   # B4  → S2_RGB[2]
+    out[:, :, 5]  = x[:, :, 3]   # B5  → S2_Red_Edge[0]
+    out[:, :, 6]  = x[:, :, 4]   # B6  → S2_Red_Edge[1]
+    out[:, :, 7]  = x[:, :, 5]   # B7  → S2_Red_Edge[2]
+    out[:, :, 8]  = x[:, :, 6]   # B8  → S2_NIR_10m
+    out[:, :, 9]  = x[:, :, 7]   # B8A → S2_NIR_20m
+    out[:, :, 10] = x[:, :, 8]   # B11 → S2_SWIR[0]
+    out[:, :, 11] = x[:, :, 9]   # B12 → S2_SWIR[1]
+
+    # NDVI = (B8 - B4) / (B8 + B4 + 1e-6)  → slot 16
+    nir, red = x[:, :, 6], x[:, :, 2]
+    out[:, :, 16] = (nir - red) / (nir + red + 1e-6)
+
+    # S1 [0,1], ERA5 [12,13], SRTM [14,15] remain zero (masked by Presto)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
 
 
 class PrestoOrdinal(nn.Module):
     """
-    Presto encoder + ordinal regression head for dense prediction.
+    Presto Encoder + ordinal regression head for dense pixel prediction.
 
     Parameters
     ----------
     num_classes : int
-        Number of ordinal classes (K=5 → K-1=4 threshold logits).
+        Ordinal classes (K=5 → K-1=4 threshold logits per pixel).
     head_hidden_dim : int
-        Channels in the intermediate Conv2d of the spatial head.
+        Channels in the Conv2d spatial head.
     freeze_encoder : bool
-        If True, Presto encoder weights are frozen (Stage 1).
-        Call `unfreeze_encoder()` to switch to Stage 2.
-    presto_path : str | None
-        Path to local Presto weights file, or None to use the default
-        pretrained checkpoint downloaded by `Presto.load_pretrained()`.
+        Stage 1: True (head-only). Call `unfreeze_encoder()` for Stage 2.
+    presto_weights : str | None
+        Path to pretrained .pt file. None = download to ~/.cache/presto/.
     """
 
     def __init__(
@@ -42,18 +141,28 @@ class PrestoOrdinal(nn.Module):
         num_classes: int = 5,
         head_hidden_dim: int = 64,
         freeze_encoder: bool = True,
-        presto_path: str | None = None,
+        presto_weights: str | None = None,
     ):
         super().__init__()
 
-        from presto import Presto  # package name: presto (via [tool.uv.sources])
+        # Import from the vendored single-file copy — zero package deps
+        from single_file_presto import Presto
 
-        self.encoder = Presto.load_pretrained(model_path=presto_path)
-        self.embed_dim = 128  # Presto's fixed output embedding size
+        # Presto defaults to max 24 timesteps. Our data has 34.
+        # The positional embeddings are frozen sinusoids, so we can just increase
+        # max_sequence_length and skip loading the pos_embed from the state dict.
+        presto = Presto.construct(max_sequence_length=34)
+        weights_path = _ensure_weights(presto_weights)
+        state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
+        # Drop the frozen positional embeddings so they don't size-mismatch
+        state_dict.pop("encoder.pos_embed", None)
+        state_dict.pop("decoder.pos_embed", None)
+        presto.load_state_dict(state_dict, strict=False)
+
+        self.encoder = presto.encoder
+        self.embed_dim = self.encoder.embedding_size  # 128
 
         n_thresholds = num_classes - 1  # 4 for K=5
-
-        # Small spatial head — 3×3 conv to blend neighbouring pixels, then 1×1
         self.head = nn.Sequential(
             nn.Conv2d(self.embed_dim, head_hidden_dim, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
@@ -64,7 +173,7 @@ class PrestoOrdinal(nn.Module):
             self._freeze_encoder()
 
     # ------------------------------------------------------------------
-    # Encoder freeze / unfreeze helpers
+    # Freeze helpers
     # ------------------------------------------------------------------
 
     def _freeze_encoder(self) -> None:
@@ -76,6 +185,9 @@ class PrestoOrdinal(nn.Module):
         """Switch to Stage 2: allow encoder gradients."""
         for p in self.encoder.parameters():
             p.requires_grad_(True)
+        # keep positional / month embeddings frozen (they are not learned)
+        self.encoder.pos_embed.requires_grad_(False)
+        self.encoder.month_embed.requires_grad_(False)
         self.encoder.train()
 
     # ------------------------------------------------------------------
@@ -86,52 +198,44 @@ class PrestoOrdinal(nn.Module):
         """
         Args
         ----
-        x : (B, T, C, H, W)  normalised Sentinel-2 timeseries [0, 1]
+        x : (B, T, C, H, W)  normalised Sentinel-2 [0, 1], C=10
 
         Returns
         -------
         logits : (B, K-1, H, W)  raw ordinal threshold logits
         """
         B, T, C, H, W = x.shape
+        device = x.device
 
-        # Reshape to pixel timeseries: (B·H·W, T, C)
-        x_pix = x.permute(0, 3, 4, 1, 2)  # (B, H, W, T, C)
-        x_pix = x_pix.reshape(B * H * W, T, C)  # (N, T, C)
+        # Pixels: (B·H·W, T, C)
+        x_pix = x.permute(0, 3, 4, 1, 2).reshape(B * H * W, T, C)
 
-        # Presto forward — no latlons or dynamic_world; mask=None means no masking
-        # Presto.forward returns (N, D) mean-pooled embedding
-        embeds = self._encode(x_pix)  # (N, D)
+        # Map to Presto's 17-band layout
+        x_pix = _to_presto_bands(x_pix)          # (N, T, 17)
 
-        # Reshape back to spatial map
-        spatial = embeds.reshape(B, H, W, self.embed_dim)  # (B, H, W, D)
-        spatial = spatial.permute(0, 3, 1, 2)  # (B, D, H, W)
+        # Presto encoder requires dynamic_world and latlons.
+        # We don't have them, so pass masked-out dummy tensors:
+        #   dynamic_world = 9 (= "no data" sentinel for DW's 9-class system)
+        #   latlons = (0°, 0°) — unused when latlon_embed is present but zeroed
+        N = B * H * W
+        dw = torch.full((N, T), 9, dtype=torch.long, device=device)  # masked
+        ll = torch.zeros(N, 2, dtype=x_pix.dtype, device=device)     # dummy
 
-        return self.head(spatial)  # (B, K-1, H, W)
+        embeds = self.encoder(
+            x=x_pix,
+            dynamic_world=dw,
+            latlons=ll,
+            mask=None,
+            month=0,
+            eval_task=True,
+        )                                          # (N, D)
 
-    def _encode(self, x_pix: torch.Tensor) -> torch.Tensor:
-        """
-        Run Presto encoder on pixel timeseries.
-
-        Presto.forward signature (from nasaharvest/presto):
-            forward(x, mask=None, dynamic_world=None, latlons=None, month=None,
-                    eval_task=True)
-            → returns (embedding, tokens) when eval_task=True
-
-        We take the CLS / mean-pooled embedding (first element of the tuple).
-        """
-        # Presto expects x in its own normalised space. Since we normalise to
-        # [0,1] by /10000 and Presto's pretrained normalisation is also
-        # reflectance-based, this is compatible.  If results are poor, revisit
-        # the per-band mean/std normalisation from Presto's data_utils.
-        result = self.encoder(x_pix, mask=None, eval_task=True)
-        # result is a tuple (global_embedding, token_embeddings)
-        # global_embedding: (N, D)
-        if isinstance(result, tuple):
-            return result[0]
-        return result  # fallback if API differs
+        # Reshape to spatial map
+        spatial = embeds.reshape(B, H, W, self.embed_dim).permute(0, 3, 1, 2)
+        return self.head(spatial)                  # (B, K-1, H, W)
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """Return integer predictions in [1, 5]."""
         with torch.no_grad():
-            logits = self.forward(x)  # (B, K-1, H, W)
+            logits = self.forward(x)
             return (logits.sigmoid() > 0.5).sum(dim=1) + 1  # → [1, 5]
