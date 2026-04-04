@@ -221,14 +221,24 @@ class PrestoOrdinal(nn.Module):
         dw = torch.full((N, T), 9, dtype=torch.long, device=device)  # masked
         ll = torch.zeros(N, 2, dtype=x_pix.dtype, device=device)     # dummy
 
-        embeds = self.encoder(
-            x=x_pix,
-            dynamic_world=dw,
-            latlons=ll,
-            mask=None,
-            month=0,
-            eval_task=True,
-        )                                          # (N, D)
+        # Presto processes every pixel as an independent sequence.
+        # N = B*H*W can be massive (e.g. 16 * 64 * 64 = 65,536).
+        # Passing 65k sequences through a Transformer at once causes CUDA OOM.
+        # We chunk it (LayerNorm has no cross-batch dependence, so this is exact).
+        CHUNK_SIZE = 4096
+        embeds_list = []
+        for i in range(0, N, CHUNK_SIZE):
+            chunk_embeds = self.encoder(
+                x=x_pix[i : i + CHUNK_SIZE],
+                dynamic_world=dw[i : i + CHUNK_SIZE],
+                latlons=ll[i : i + CHUNK_SIZE],
+                mask=None,
+                month=0,
+                eval_task=True,
+            )
+            embeds_list.append(chunk_embeds)
+            
+        embeds = torch.cat(embeds_list, dim=0)     # (N, D)
 
         # Reshape to spatial map
         spatial = embeds.reshape(B, H, W, self.embed_dim).permute(0, 3, 1, 2)
