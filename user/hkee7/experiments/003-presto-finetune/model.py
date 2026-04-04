@@ -257,6 +257,15 @@ class PrestoOrdinal(nn.Module):
                     month=0,
                     eval_task=True,
                 )
+            
+            # FORCE SEQUENTIAL BACKWARD EXECUTION:
+            # PyTorch's multithreaded autograd engine normally executes all chunk backward passes 
+            # simultaneously (since they are independently concatenated), which causes VRAM 
+            # to explode instantly to N > 16000 footprint regardless of checkpointing!
+            # Adding an invisible dependency chain forces them to backpropagate one-by-one.
+            if len(embeds_list) > 0:
+                chunk_embeds = chunk_embeds + (embeds_list[-1].sum() * 0.0)
+
             embeds_list.append(chunk_embeds)
             
         embeds = torch.cat(embeds_list, dim=0)     # (N, D)
