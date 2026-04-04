@@ -2,7 +2,7 @@
 #SBATCH --job-name=003-presto-finetune
 #SBATCH --account=paceship-clef2026_img_ai4agri
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=gpu-rtxpro-blackwell
+#SBATCH --constraint=rtx6000
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --time=16:00:00
@@ -20,4 +20,4 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 003-presto-finetune
 
 # Run experiment
-uv run user/hkee7/experiments/003-presto-finetune/train.py --stage 0 --batch-size 128 --chunk-size 32768
+uv run user/hkee7/experiments/003-presto-finetune/train.py --stage 0 --batch-size 32 --chunk-size 32768

@@ -211,27 +211,30 @@ class PrestoOrdinal(nn.Module):
 
         # Pixels: (B·H·W, T, C)
         x_pix = x.permute(0, 3, 4, 1, 2).reshape(B * H * W, T, C)
-
-        # Map to Presto's 17-band layout
-        x_pix = _to_presto_bands(x_pix)          # (N, T, 17)
-
-        # Presto encoder requires dynamic_world and latlons.
-        # We don't have them, so pass masked-out dummy tensors:
-        #   dynamic_world = 9 (= "no data" sentinel for DW's 9-class system)
-        #   latlons = (0°, 0°) — unused when latlon_embed is present but zeroed
         N = B * H * W
-        dw = torch.full((N, T), 9, dtype=torch.long, device=device)  # masked
-        ll = torch.zeros(N, 2, dtype=x_pix.dtype, device=device)     # dummy
 
         # Presto processes every pixel as an independent sequence.
         # N = B*H*W can be massive.
-        # Chunking limits max attention footprint.
+        # We perform band-mapping and dummy allocations strictly per-chunk 
+        # to ensure peak VRAM stays extremely low permanently.
         embeds_list = []
         for i in range(0, N, self.chunk_size):
+            # 1. Take raw 10-band chunk
+            chunk_raw = x_pix[i : i + self.chunk_size]
+            
+            # 2. Map only this chunk to 17-band Presto layout
+            chunk_x = _to_presto_bands(chunk_raw)
+            
+            # 3. Create dummy DynamicWorld and LatLons just for this chunk
+            chunk_size_real = chunk_x.shape[0]
+            chunk_dw = torch.full((chunk_size_real, T), 9, dtype=torch.long, device=device)
+            chunk_ll = torch.zeros(chunk_size_real, 2, dtype=chunk_x.dtype, device=device)
+
+            # 4. Pass through Transformer
             chunk_embeds = self.encoder(
-                x=x_pix[i : i + self.chunk_size],
-                dynamic_world=dw[i : i + self.chunk_size],
-                latlons=ll[i : i + self.chunk_size],
+                x=chunk_x,
+                dynamic_world=chunk_dw,
+                latlons=chunk_ll,
                 mask=None,
                 month=0,
                 eval_task=True,

@@ -330,6 +330,7 @@ if __name__ == "__main__":
     parser.add_argument("--stage2-epochs", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--chunk-size", type=int, help="pixels to process simultaneously in Presto")
+    parser.add_argument("--num-workers", type=int, help="number of dataloader workers")
     parser.add_argument("--device", type=str)
     parser.add_argument("--save-dir", type=str)
     parser.add_argument("--seed", type=int)
