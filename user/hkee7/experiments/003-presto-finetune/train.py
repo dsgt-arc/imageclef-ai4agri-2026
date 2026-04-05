@@ -264,7 +264,6 @@ def main(cfg: Config, stage: int, ckpt_path: str | None):
         head_hidden_dim=cfg.head_hidden_dim,
         freeze_encoder=True,  # always start frozen; unfreeze in Stage 2
         presto_weights=cfg.presto_path,
-        chunk_size=cfg.chunk_size,
     ).to(cfg.device)
 
     if ckpt_path:
@@ -329,7 +328,6 @@ if __name__ == "__main__":
     parser.add_argument("--stage1-epochs", type=int)
     parser.add_argument("--stage2-epochs", type=int)
     parser.add_argument("--batch-size", type=int)
-    parser.add_argument("--chunk-size", type=int, help="pixels to process simultaneously in Presto")
     parser.add_argument("--num-workers", type=int, help="number of dataloader workers")
     parser.add_argument("--device", type=str)
     parser.add_argument("--save-dir", type=str)

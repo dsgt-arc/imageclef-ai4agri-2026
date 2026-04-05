@@ -427,8 +427,12 @@ class Encoder(nn.Module):
         x = torch.cat((latlon_tokens, x), dim=1)
 
         # apply Transformer blocks
+        import torch.utils.checkpoint as cp
         for blk in self.blocks:
-            x = blk(x)
+            if x.requires_grad and self.training:
+                x = cp.checkpoint(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
 
         # mask will be a boolean of shape [batch, total_num_tokens]
         if eval_task:

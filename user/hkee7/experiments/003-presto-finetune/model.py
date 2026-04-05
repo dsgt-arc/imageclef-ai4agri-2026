@@ -142,10 +142,8 @@ class PrestoOrdinal(nn.Module):
         head_hidden_dim: int = 64,
         freeze_encoder: bool = True,
         presto_weights: str | None = None,
-        chunk_size: int = 65536,
     ):
         super().__init__()
-        self.chunk_size = chunk_size
         self.freeze_encoder = freeze_encoder
 
         # Import from the vendored single-file copy — zero package deps
@@ -230,47 +228,27 @@ class PrestoOrdinal(nn.Module):
             chunk_size_real = chunk_x.shape[0]
             chunk_dw = torch.full((chunk_size_real, T), 9, dtype=torch.long, device=device)
             chunk_ll = torch.zeros(chunk_size_real, 2, dtype=chunk_x.dtype, device=device)
+        
+        # Create dummy DynamicWorld and LatLons
+        dw = torch.full((B * H * W, T), 9, dtype=torch.long, device=device)
+        ll = torch.zeros(B * H * W, 2, dtype=x.dtype, device=device)
 
-            # 4. Pass through Transformer
-            if not self.freeze_encoder:
-                # Stage 2: Encoder is unfrozen. If we don't checkpoint, PyTorch will keep  
-                # enormous attention activation graphs across all chunks alive in VRAM 
-                # until loss.backward() completes. This explodes VRAM linearly with batch size.
-                # Checkpointing drops the graphs and perfectly flatlines VRAM to just 1 chunk!
-                chunk_x.requires_grad_(True)  # Force graph connection hook
-                chunk_embeds = torch.utils.checkpoint.checkpoint(
-                    self.encoder,
-                    chunk_x,
-                    chunk_dw,
-                    chunk_ll,
-                    None,  # mask
-                    0,     # month
-                    True,  # eval_task
-                    use_reentrant=True,
-                )
-            else:
-                chunk_embeds = self.encoder(
-                    x=chunk_x,
-                    dynamic_world=chunk_dw,
-                    latlons=chunk_ll,
-                    mask=None,
-                    month=0,
-                    eval_task=True,
-                )
-            
-            # FORCE SEQUENTIAL BACKWARD EXECUTION:
-            # PyTorch's multithreaded autograd engine normally executes all chunk backward passes 
-            # simultaneously (since they are independently concatenated), which causes VRAM 
-            # to explode instantly to N > 16000 footprint regardless of checkpointing!
-            # Adding an invisible dependency chain forces them to backpropagate one-by-one.
-            if len(embeds_list) > 0:
-                chunk_embeds = chunk_embeds + (embeds_list[-1].sum() * 0.0)
-
-            embeds_list.append(chunk_embeds)
-            
-        embeds = torch.cat(embeds_list, dim=0)     # (N, D)
-
-        # Reshape to spatial map
+        # Forward pass on the full batch natively
+        x_pix = _to_presto_bands(x_pix)
+        
+        if not self.freeze_encoder:
+            x_pix.requires_grad_(True)
+        
+        embeds = self.encoder(
+            x=x_pix,
+            dynamic_world=dw,
+            latlons=ll,
+            mask=None,
+            month=0,
+            eval_task=True,
+        )
+        
+        # Spatial reconstruction
         spatial = embeds.reshape(B, H, W, self.embed_dim).permute(0, 3, 1, 2)
         return self.head(spatial)                  # (B, K-1, H, W)
 
