@@ -2,7 +2,7 @@
 #SBATCH --job-name=003-presto-finetune
 #SBATCH --account=paceship-clef2026_img_ai4agri
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=rtx6000
+#SBATCH --partition=gpu-rtxpro-blackwell
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --time=16:00:00
