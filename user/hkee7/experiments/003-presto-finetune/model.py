@@ -212,23 +212,6 @@ class PrestoOrdinal(nn.Module):
         x_pix = x.permute(0, 3, 4, 1, 2).reshape(B * H * W, T, C)
         N = B * H * W
 
-        # Presto processes every pixel as an independent sequence.
-        # N = B*H*W can be massive.
-        # We perform band-mapping and dummy allocations strictly per-chunk 
-        # to ensure peak VRAM stays extremely low permanently.
-        embeds_list = []
-        for i in range(0, N, self.chunk_size):
-            # 1. Take raw 10-band chunk
-            chunk_raw = x_pix[i : i + self.chunk_size]
-            
-            # 2. Map only this chunk to 17-band Presto layout
-            chunk_x = _to_presto_bands(chunk_raw)
-            
-            # 3. Create dummy DynamicWorld and LatLons just for this chunk
-            chunk_size_real = chunk_x.shape[0]
-            chunk_dw = torch.full((chunk_size_real, T), 9, dtype=torch.long, device=device)
-            chunk_ll = torch.zeros(chunk_size_real, 2, dtype=chunk_x.dtype, device=device)
-        
         # Create dummy DynamicWorld and LatLons
         dw = torch.full((B * H * W, T), 9, dtype=torch.long, device=device)
         ll = torch.zeros(B * H * W, 2, dtype=x.dtype, device=device)
