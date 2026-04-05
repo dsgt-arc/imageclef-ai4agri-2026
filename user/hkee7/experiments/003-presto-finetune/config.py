@@ -29,7 +29,8 @@ class Config:
     stage2_lr: float = 5e-5  # lower LR for encoder weights
     stage2_head_lr: float = 5e-4  # higher LR for head
 
-    batch_size: int = 1  # Lower physical batch size
+    batch_size: int = 1
+    chunk_size: int = 256  # pixels per encoder call; 256 → ~3 GB attention peak on 24 GB card
     weight_decay: float = 1e-4
     scheduler: str = "cosine"
     num_workers: int = 4

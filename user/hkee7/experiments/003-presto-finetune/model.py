@@ -134,6 +134,8 @@ class PrestoOrdinal(nn.Module):
         Stage 1: True (head-only). Call `unfreeze_encoder()` for Stage 2.
     presto_weights : str | None
         Path to pretrained .pt file. None = download to ~/.cache/presto/.
+    chunk_size : int
+        Number of pixels to process through the encoder at once.
     """
 
     def __init__(
@@ -142,9 +144,11 @@ class PrestoOrdinal(nn.Module):
         head_hidden_dim: int = 64,
         freeze_encoder: bool = True,
         presto_weights: str | None = None,
+        chunk_size: int = 256,
     ):
         super().__init__()
-        self.freeze_encoder = freeze_encoder
+        self._freeze_encoder_flag = freeze_encoder
+        self.chunk_size = chunk_size
 
         # Import from the vendored single-file copy — zero package deps
         from single_file_presto import Presto
@@ -190,6 +194,7 @@ class PrestoOrdinal(nn.Module):
         self.encoder.pos_embed.requires_grad_(False)
         self.encoder.month_embed.requires_grad_(False)
         self.encoder.train()
+        self._freeze_encoder_flag = False
 
     # ------------------------------------------------------------------
     # Forward
@@ -208,32 +213,45 @@ class PrestoOrdinal(nn.Module):
         B, T, C, H, W = x.shape
         device = x.device
 
-        # Pixels: (B·H·W, T, C)
+        # (B, T, C, H, W) → (B·H·W, T, C)
         x_pix = x.permute(0, 3, 4, 1, 2).reshape(B * H * W, T, C)
         N = B * H * W
 
-        # Create dummy DynamicWorld and LatLons
-        dw = torch.full((B * H * W, T), 9, dtype=torch.long, device=device)
-        ll = torch.zeros(B * H * W, 2, dtype=x.dtype, device=device)
+        # Map 10 S2 bands → 17-band Presto layout
+        x_pix = _to_presto_bands(x_pix)   # (N, T, 17)
 
-        # Forward pass on the full batch natively
-        x_pix = _to_presto_bands(x_pix)
-        
-        if not self.freeze_encoder:
-            x_pix.requires_grad_(True)
-        
-        embeds = self.encoder(
-            x=x_pix,
-            dynamic_world=dw,
-            latlons=ll,
-            mask=None,
-            month=0,
-            eval_task=True,
-        )
-        
-        # Spatial reconstruction
+        embeds_list = []
+        for start in range(0, N, self.chunk_size):
+            chunk_x  = x_pix[start : start + self.chunk_size]          # (cs, T, 17)
+            cs       = chunk_x.shape[0]
+            chunk_dw = torch.full((cs, T), 9, dtype=torch.long, device=device)
+            chunk_ll = torch.zeros(cs, 2, dtype=chunk_x.dtype, device=device)
+
+            if self._freeze_encoder_flag:
+                # Stage 1: encoder is frozen, plain forward pass
+                with torch.no_grad():
+                    chunk_embed = self.encoder(
+                        x=chunk_x, dynamic_world=chunk_dw,
+                        latlons=chunk_ll, mask=None, month=0, eval_task=True,
+                    )
+                embeds_list.append(chunk_embed)
+            else:
+                # Stage 2: encoder is unfrozen.
+                # checkpoint() drops the saved activations and recomputes
+                # them on the backward pass, keeping peak VRAM = 1 chunk.
+                chunk_embed = torch.utils.checkpoint.checkpoint(
+                    self.encoder,
+                    chunk_x, chunk_dw, chunk_ll,
+                    None,   # mask
+                    0,      # month
+                    True,   # eval_task
+                    use_reentrant=True,
+                )
+                embeds_list.append(chunk_embed)
+
+        embeds = torch.cat(embeds_list, dim=0)           # (N, D)
         spatial = embeds.reshape(B, H, W, self.embed_dim).permute(0, 3, 1, 2)
-        return self.head(spatial)                  # (B, K-1, H, W)
+        return self.head(spatial)                        # (B, K-1, H, W)
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """Return integer predictions in [1, 5]."""
