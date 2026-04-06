@@ -1,0 +1,16 @@
+[project]
+name = "004-prithvi-finetune"
+version = "0.1.0"
+description = "Prithvi-EO-2.0 via TerraTorch for viticulture suitability"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.1.0",
+    "torchvision",
+    "lightning",
+    "terratorch",
+    "transformers",
+    "timm",
+    "polars",
+    "pillow",
+]
