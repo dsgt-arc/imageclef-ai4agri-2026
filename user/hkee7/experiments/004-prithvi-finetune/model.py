@@ -1,7 +1,10 @@
 import lightning.pytorch as pl
 import torch
 import torch.nn as nn
-from terratorch.models import PixelwiseModel
+from terratorch.models.pixel_wise_model import PixelWiseModel
+from terratorch.models import EncoderDecoderFactory
+
+model_factory = EncoderDecoderFactory()
 
 def pm1_accuracy(pred, target, ignore_index=0):
     mask = target != ignore_index
@@ -46,8 +49,9 @@ class PrithviLightning(pl.LightningModule):
         # position embedding mismatches if the backbone expects a specific num_frames.
         # prithvi_eo_v2_300 expects 6 bands.
         self.frames_per_chunk = 2
-        
-        self.model = PixelwiseModel(
+
+        self.model = model_factory.build_model(
+            task='segmentation',
             backbone=cfg.backbone,
             backbone_pretrained=True, # Automatically fetch from huggingface
             backbone_in_channels=6,
