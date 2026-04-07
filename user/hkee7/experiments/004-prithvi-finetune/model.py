@@ -1,10 +1,11 @@
 import lightning.pytorch as pl
+import terratorch.models.backbones.scalemae
 import torch
 import torch.nn as nn
 from terratorch.models.pixel_wise_model import PixelWiseModel
-from terratorch.models import EncoderDecoderFactory
+from terratorch.models import EncoderDecoderFactory, PrithviModelFactory
 
-model_factory = EncoderDecoderFactory()
+model_factory = PrithviModelFactory()
 
 def pm1_accuracy(pred, target, ignore_index=0):
     mask = target != ignore_index
