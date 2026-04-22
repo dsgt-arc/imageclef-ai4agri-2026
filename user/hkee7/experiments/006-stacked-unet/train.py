@@ -6,9 +6,10 @@ Matches the organiser's baseline (El Sakka et al., 2025 supplement):
   - AdamW, lr=1e-5, no scheduler, ordinal BCE loss
 
 Usage:
-    uv run python train.py                                # defaults
-    uv run python train.py --epochs 500 --lr 1e-4        # override
-    uv run python train.py --mode classification          # cross-entropy
+    uv run python train.py                                    # defaults
+    uv run python train.py --epochs 500 --lr 1e-4            # override
+    uv run python train.py --mode classification              # cross-entropy
+    uv run python train.py --resume runs/exp1/last.pt        # resume from checkpoint
 """
 
 from __future__ import annotations
@@ -182,7 +183,7 @@ def validate(model: nn.Module, loader: DataLoader, cfg: Config):
 # ---------------------------------------------------------------------------
 
 
-def main(cfg: Config):
+def main(cfg: Config, resume: str | None = None):
     torch.manual_seed(cfg.seed)
     os.makedirs(cfg.save_dir, exist_ok=True)
 
@@ -232,10 +233,26 @@ def main(cfg: Config):
     criterion = build_criterion(cfg)
     scaler = GradScaler() if cfg.use_amp and cfg.device == "cuda" else None
 
+    start_epoch = 0
     best_pm1 = 0.0
+
+    # ── Resume from checkpoint ──────────────────────────────────────────────
+    if resume is not None:
+        print(f"Resuming from {resume} …")
+        ckpt = torch.load(resume, map_location=cfg.device, weights_only=False)
+        model.load_state_dict(ckpt["model_state_dict"])
+        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        if scheduler is not None and "scheduler_state_dict" in ckpt:
+            scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+        if scaler is not None and "scaler_state_dict" in ckpt:
+            scaler.load_state_dict(ckpt["scaler_state_dict"])
+        start_epoch = ckpt["epoch"]          # last completed epoch
+        best_pm1    = ckpt.get("best_pm1", ckpt["metrics"].get("pm1_acc", 0.0))
+        print(f"  Resumed at epoch {start_epoch}, best ±1 so far: {best_pm1:.4f}")
+
     print(f"Training for {cfg.epochs} epochs (mode={cfg.mode}, lr={cfg.lr:.0e}, scheduler={cfg.scheduler}) …\n")
 
-    for epoch in range(cfg.epochs):
+    for epoch in range(start_epoch, cfg.epochs):
         t0 = time.time()
         train_loss = train_one_epoch(model, train_loader, optimizer, criterion, cfg, scaler, epoch)
 
@@ -259,17 +276,21 @@ def main(cfg: Config):
             "epoch": epoch + 1,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
+            "scaler_state_dict": scaler.state_dict() if scaler is not None else None,
             "metrics": metrics,
+            "best_pm1": best_pm1,
             "config": cfg,
             "in_channels": in_channels,
         }
-        torch.save(ckpt, os.path.join(cfg.save_dir, "last.pt"))
-
         if metrics["pm1_acc"] > best_pm1:
             best_pm1 = metrics["pm1_acc"]
+            ckpt["best_pm1"] = best_pm1
             path = os.path.join(cfg.save_dir, "best.pt")
             torch.save(ckpt, path)
             print(f"  ↑ new best ±1 accuracy — saved to {path}")
+
+        torch.save(ckpt, os.path.join(cfg.save_dir, "last.pt"))
 
     print(f"\nDone. Best ±1 accuracy: {best_pm1:.4f}")
 
@@ -299,10 +320,15 @@ if __name__ == "__main__":
     parser.add_argument("--augment", action=argparse.BooleanOptionalAction)
     parser.add_argument("--base-channels", type=int)
     parser.add_argument("--depth", type=int)
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Path to a last.pt checkpoint to resume training from")
     args = parser.parse_args()
 
     cfg = Config()
+    resume_path = args.resume
     for key, value in vars(args).items():
+        if key == "resume":
+            continue
         if value is not None:
             setattr(cfg, key.replace("-", "_"), value)
-    main(cfg)
+    main(cfg, resume=resume_path)

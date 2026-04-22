@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=RTX6000
 #SBATCH --cpus-per-task=6
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --time=08:00:00
 #SBATCH --qos=embers
 #SBATCH --output=artifacts/slurm-%j.out
@@ -24,4 +24,4 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 006-stacked-unet
 
 # Run experiment
-uv run user/hkee7/experiments/006-stacked-unet/train.py --lr 1e-4 --scheduler cosine --cosine-t0 300 --epochs 300 --save-dir artifacts/ordinal-1e4-cosine
+uv run user/hkee7/experiments/006-stacked-unet/train.py --save-dir artifacts/ordinal-1e5
