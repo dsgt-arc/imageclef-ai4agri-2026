@@ -25,7 +25,8 @@ class UTAEDataset(Dataset):
     Returns
     -------
     data : Tensor[float32]  — (T, C, H, W)
-        Sentinel-2 time series, normalised to [0, 1].
+        Sentinel-2 time series, z-score normalised per band (if stats provided)
+        or scaled to [0, 1] by dividing by 10,000.
     label : Tensor[long]    — (H, W)
         Pixel labels 0–5 (0 = unlabelled, 1–5 = potential classes).
     positions : Tensor[long] — (T,)
@@ -38,6 +39,8 @@ class UTAEDataset(Dataset):
         chunk_dir: str = "data/precomputed_tensors",
         metadata_path: str = "data/agripotential/metadata.csv",
         augment: bool = False,
+        band_mean: torch.Tensor | None = None,
+        band_std: torch.Tensor | None = None,
     ):
         self.chunk_dir = os.path.join(chunk_dir, mode)
         chunk_files = sorted(f for f in os.listdir(self.chunk_dir) if f.endswith(".pt"))
@@ -52,6 +55,14 @@ class UTAEDataset(Dataset):
         self.time_offsets = torch.from_numpy(_parse_positions(meta))
 
         self.augment = augment
+
+        # Per-band normalisation: (C,) tensors reshaped for broadcasting (1, C, 1, 1)
+        if band_mean is not None and band_std is not None:
+            self.band_mean = band_mean.view(1, -1, 1, 1)
+            self.band_std  = band_std.view(1, -1, 1, 1)
+        else:
+            self.band_mean = None
+            self.band_std  = None
 
         self._cache_file: str | None = None
         self._cache_data = None
@@ -70,8 +81,13 @@ class UTAEDataset(Dataset):
             self._cache_label = payload["label"]
             self._cache_ids = payload["patch_ids"]
 
-        data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE
-        data = data.clamp(0.0, 1.0)
+        data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE  # (T, C, H, W)
+
+        if self.band_mean is not None:
+            # z-score normalise: broadcast (1, C, 1, 1) across T, H, W
+            data = (data - self.band_mean) / self.band_std
+        else:
+            data = data.clamp(0.0, 1.0)
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx]
 

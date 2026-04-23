@@ -188,8 +188,22 @@ def main(cfg: Config, resume: str | None = None):
     os.makedirs(cfg.save_dir, exist_ok=True)
 
     print("Loading datasets …")
-    train_ds = UTAEDataset("train", cfg.data_path, cfg.metadata_path, augment=cfg.augment)
-    val_ds   = UTAEDataset("val",   cfg.data_path, cfg.metadata_path, augment=False)
+
+    # Load per-band normalisation stats (computed by compute_stats.py)
+    band_mean, band_std = None, None
+    if os.path.exists(cfg.stats_path):
+        stats = torch.load(cfg.stats_path, weights_only=True)
+        band_mean = stats["mean"]
+        band_std  = stats["std"]
+        print(f"  Loaded band stats from {cfg.stats_path} (z-score normalisation)")
+    else:
+        print(f"  WARNING: {cfg.stats_path} not found — falling back to /10000 scaling.")
+        print(f"  Run: uv run python compute_stats.py --data-path {cfg.data_path}")
+
+    train_ds = UTAEDataset("train", cfg.data_path, cfg.metadata_path,
+                           augment=cfg.augment, band_mean=band_mean, band_std=band_std)
+    val_ds   = UTAEDataset("val",   cfg.data_path, cfg.metadata_path,
+                           augment=False, band_mean=band_mean, band_std=band_std)
     print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
 
     # Infer in_channels from first sample (T * num_bands)
@@ -317,6 +331,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--save-dir", type=str)
+    parser.add_argument("--stats-path", type=str)
     parser.add_argument("--augment", action=argparse.BooleanOptionalAction)
     parser.add_argument("--base-channels", type=int)
     parser.add_argument("--depth", type=int)

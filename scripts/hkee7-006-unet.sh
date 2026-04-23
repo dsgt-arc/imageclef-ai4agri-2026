@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=RTX6000
 #SBATCH --cpus-per-task=6
-#SBATCH --mem=128G
+#SBATCH --mem=256G
 #SBATCH --time=08:00:00
 #SBATCH --qos=embers
 #SBATCH --output=artifacts/slurm-%j.out

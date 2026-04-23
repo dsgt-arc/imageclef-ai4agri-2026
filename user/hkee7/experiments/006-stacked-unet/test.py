@@ -75,7 +75,18 @@ def predict(
     print(f"Mode: {cfg.mode}  |  in_channels: {in_channels}")
     print(f"TTA: {'enabled (8 augmentations)' if tta else 'disabled'}")
 
-    test_ds = UTAEDataset("test", cfg.data_path, cfg.metadata_path)
+    # Load per-band normalisation stats — must match what was used during training
+    band_mean, band_std = None, None
+    if os.path.exists(cfg.stats_path):
+        stats = torch.load(cfg.stats_path, weights_only=True)
+        band_mean = stats["mean"]
+        band_std  = stats["std"]
+        print(f"Loaded band stats from {cfg.stats_path} (z-score normalisation)")
+    else:
+        print(f"WARNING: {cfg.stats_path} not found — falling back to /10000 scaling.")
+
+    test_ds = UTAEDataset("test", cfg.data_path, cfg.metadata_path,
+                          band_mean=band_mean, band_std=band_std)
     test_loader = DataLoader(
         test_ds,
         batch_size=cfg.batch_size,

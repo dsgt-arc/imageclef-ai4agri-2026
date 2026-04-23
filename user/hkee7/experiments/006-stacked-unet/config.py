@@ -43,6 +43,9 @@ class Config:
     smooth_l1_beta: float = 1.0
     ignore_index: int = 0         # unlabelled pixels
 
+    # ---- Normalisation ------------------------------------------------------
+    stats_path: str = "stats.pt"  # output of compute_stats.py (per-band mean/std)
+
     # ---- Augmentation -------------------------------------------------------
     augment: bool = False
 
