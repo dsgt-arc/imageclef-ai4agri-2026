@@ -129,10 +129,13 @@ def train_one_epoch(
 
         if scaler is not None:
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.grad_clip)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.grad_clip)
             optimizer.step()
 
         total_loss += loss.item()
@@ -321,6 +324,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--lr", type=float)
     parser.add_argument("--weight-decay", type=float)
+    parser.add_argument("--grad-clip", type=float)
     parser.add_argument("--scheduler", choices=["cosine", "step", "none"])
     parser.add_argument("--cosine-t0", type=int)
     parser.add_argument("--cosine-t-mult", type=int)

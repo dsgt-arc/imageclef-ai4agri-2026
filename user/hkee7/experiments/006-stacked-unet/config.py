@@ -30,6 +30,7 @@ class Config:
     batch_size: int = 32
     lr: float = 1e-5              # matches organiser supplement
     weight_decay: float = 1e-4
+    grad_clip: float = 1.0        # max gradient norm; set 0 to disable
     scheduler: str = "none"       # "cosine", "step", or "none" (organiser used none)
     cosine_t0: int = 300
     cosine_t_mult: int = 1
