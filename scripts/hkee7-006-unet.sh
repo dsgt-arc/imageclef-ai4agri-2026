@@ -24,4 +24,11 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 006-stacked-unet
 
 # Run experiment
-uv run user/hkee7/experiments/006-stacked-unet/train.py --save-dir artifacts/ordinal-1e5
+uv run user/hkee7/experiments/006-stacked-unet/train.py --depth 5 \
+  --base-channels 64 \
+  --lr 1e-3 \
+  --scheduler cosine \
+  --cosine-t0 300 \
+  --batch-size 16 \
+  --stats-path stats.pt \
+  --save-dir runs/depth5-1e3-cosine \
