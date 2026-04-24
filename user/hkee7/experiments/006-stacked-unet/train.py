@@ -333,6 +333,7 @@ if __name__ == "__main__":
     parser.add_argument("--save-dir", type=str)
     parser.add_argument("--stats-path", type=str)
     parser.add_argument("--augment", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--pin-memory", action=argparse.BooleanOptionalAction)
     parser.add_argument("--base-channels", type=int)
     parser.add_argument("--depth", type=int)
     parser.add_argument("--resume", type=str, default=None,

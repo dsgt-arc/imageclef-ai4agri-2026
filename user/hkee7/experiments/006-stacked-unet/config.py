@@ -36,7 +36,7 @@ class Config:
     step_gamma: float = 0.5
     step_size: int = 50
     num_workers: int = 4
-    pin_memory: bool = True
+    pin_memory: bool = False
 
     # ---- Loss ---------------------------------------------------------------
     loss_fn: str = "smooth_l1"    # for regression mode only
