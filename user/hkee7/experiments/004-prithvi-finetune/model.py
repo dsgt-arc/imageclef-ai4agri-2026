@@ -10,16 +10,12 @@ Input: (B, T, C=6, H, W) — 6 HLS bands selected from the 10 S2 bands.
 TerraTorch expects (B, C, T, H, W), so we permute before the forward pass.
 """
 
-import logging
-
 import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 from terratorch.datasets import HLSBands
 from terratorch.models import EncoderDecoderFactory
 from terratorch.registry import BACKBONE_REGISTRY
-
-logger = logging.getLogger(__name__)
 
 model_factory = EncoderDecoderFactory()
 
@@ -53,21 +49,29 @@ def _probe_effective_time_dim(backbone_name: str, bands, num_frames: int, img_si
         img_size=img_size,
     )
     eff_t = probe.out_channels[0] // _PRITHVI_300M_EMBED_DIM
+
+    # Also grab patch_embed config for full diagnostics
+    for m in probe.modules():
+        if hasattr(m, "input_size") and hasattr(m, "grid_size"):
+            print(
+                f"[prithvi-probe] patch_embed.input_size={m.input_size}  "
+                f"grid_size={m.grid_size}  num_patches={m.num_patches}",
+                flush=True,
+            )
+            break
+
     del probe
-    logger.info(
-        "[prithvi] probe backbone: out_channels[0]=%d  → effective_time_dim=%d "
-        "(requested num_frames=%d)",
-        eff_t * _PRITHVI_300M_EMBED_DIM,
-        eff_t,
-        num_frames,
+
+    print(
+        f"[prithvi-probe] out_channels[0]={eff_t * _PRITHVI_300M_EMBED_DIM}  "
+        f"→ effective_time_dim={eff_t}  (requested num_frames={num_frames})",
+        flush=True,
     )
     if eff_t != num_frames:
-        logger.warning(
-            "[prithvi] effective_time_dim (%d) differs from cfg.num_frames (%d). "
-            "Using %d for ReshapeTokensToImage.",
-            eff_t,
-            num_frames,
-            eff_t,
+        print(
+            f"[prithvi-probe] WARNING: effective_time_dim ({eff_t}) != "
+            f"cfg.num_frames ({num_frames}).  Using {eff_t} for ReshapeTokensToImage.",
+            flush=True,
         )
     return eff_t
 
