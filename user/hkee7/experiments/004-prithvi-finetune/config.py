@@ -30,7 +30,7 @@ class Config:
     batch_size: int = 4
     accumulate_grad_batches: int = 2   # effective batch = batch_size * accumulate_grad_batches
     lr: float = 1e-4
-    epochs: int = 50
+    epochs: int = 200
     weight_decay: float = 0.05
     grad_clip: float = 1.0
     use_amp: bool = True
