@@ -15,8 +15,8 @@ class Config:
     # Prithvi backbone name in terratorch registry
     backbone: str = "prithvi_eo_v2_300"
 
-    # Number of input timesteps (must match dataset; 11 for AgriPotential)
-    num_frames: int = 11
+    # Number of input timesteps (must match dataset; 34 for AgriPotential)
+    num_frames: int = 34
 
     # Spatial tile size in pixels (must match precomputed tensor patches)
     img_size: int = 128
