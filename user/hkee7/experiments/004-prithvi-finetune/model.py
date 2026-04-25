@@ -151,6 +151,21 @@ class PrithviSegmentation(pl.LightningModule):
             num_classes=cfg.num_classes - 1,  # K-1 ordinal thresholds
         )
 
+        # Inspect the REAL (pretrained) backbone after build to confirm its config
+        print("[debug-init] inspecting REAL pretrained encoder:", flush=True)
+        for m in self.model.encoder.modules():
+            if hasattr(m, "input_size") and hasattr(m, "grid_size"):
+                print(
+                    f"[debug-init]   patch_embed.input_size={m.input_size}  "
+                    f"grid_size={m.grid_size}  num_patches={m.num_patches}",
+                    flush=True,
+                )
+                break
+        print(
+            f"[debug-init]   encoder.out_channels[0]={self.model.encoder.out_channels[0]}",
+            flush=True,
+        )
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
@@ -158,8 +173,24 @@ class PrithviSegmentation(pl.LightningModule):
         Returns:
             logits: (B, K-1, H, W)
         """
-        # TerraTorch expects (B, C, T, H, W)
-        return self.model(x.permute(0, 2, 1, 3, 4))
+        x_in = x.permute(0, 2, 1, 3, 4)  # → (B, C, T, H, W)
+
+        # One-time diagnostic: show what the backbone actually emits
+        if not hasattr(self, "_debug_fwd_done"):
+            self._debug_fwd_done = True
+            print(f"[debug-fwd] x_in.shape = {x_in.shape}", flush=True)
+            with torch.no_grad():
+                raw = self.model.encoder(x_in)
+            if isinstance(raw, (list, tuple)):
+                print(
+                    f"[debug-fwd] encoder returned {len(raw)} features; "
+                    f"[0].shape = {raw[0].shape}  [5].shape = {raw[5].shape}",
+                    flush=True,
+                )
+            else:
+                print(f"[debug-fwd] encoder returned single tensor: {raw.shape}", flush=True)
+
+        return self.model(x_in)
 
     def training_step(self, batch, batch_idx):
         x, y, _doys = batch
