@@ -1,3 +1,11 @@
+"""
+Generate test-set predictions with a fine-tuned Prithvi-EO-2.0 model
+and package them into a competition submission ZIP.
+
+Usage:
+    uv run python predict.py --checkpoint artifacts/best_prithvi_....ckpt
+"""
+
 import argparse
 import os
 import zipfile
@@ -6,15 +14,15 @@ import numpy as np
 import torch
 from config import Config
 from dataset import PrithviDataset
-from model import PrithviLightning
+from model import PrithviSegmentation
 from PIL import Image
 from torch.utils.data import DataLoader
 
+
 def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
     print(f"Loading checkpoint: {checkpoint_path}")
-    
-    # PrithviLightning uses config in checkpoint or passes from load_from_checkpoint
-    model = PrithviLightning.load_from_checkpoint(checkpoint_path, cfg=cfg)
+
+    model = PrithviSegmentation.load_from_checkpoint(checkpoint_path, cfg=cfg)
     model.eval()
     model.to(cfg.device)
 
@@ -24,7 +32,7 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
         pin_memory=cfg.pin_memory,
-        shuffle=False
+        shuffle=False,
     )
     print(f"  {len(test_ds)} patches to predict")
 
@@ -36,15 +44,12 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
             data = data.to(cfg.device, non_blocking=True)
 
             with torch.autocast(cfg.device, enabled=cfg.use_amp):
-                logits = model(data)                         # (B, K-1, H, W)
-            preds = (logits.sigmoid() > 0.5).sum(dim=1) + 1 # → [1, 5]
+                logits = model(data)                          # (B, K-1, H, W)
 
-            # Convert from training space [1,5] → submission space [0,4],
-            # then clamp to [1,3] so no prediction is ever >1 away from
-            # the true label at the boundaries (safe for ±1 accuracy metric).
-            submission_preds = preds.long().clamp(2, 4) - 1  # → [1, 3]
+            preds = (logits.sigmoid() > 0.5).sum(dim=1) + 1  # → [1, 5]
+            preds = preds.long().clamp(1, 5)                  # safety clamp
 
-            for pred, pid in zip(submission_preds.cpu().numpy(), patch_ids):
+            for pred, pid in zip(preds.cpu().numpy(), patch_ids):
                 img = Image.fromarray(pred.astype(np.uint8), mode="L")
                 img.save(os.path.join(output_dir, f"{pid}.png"))
                 count += 1
@@ -60,8 +65,8 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Generate test predictions with Prithvi")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to .ckpt file")
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--output-dir", type=str, default="submission")
     args = parser.parse_args()
 

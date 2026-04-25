@@ -1,120 +1,106 @@
+"""
+Prithvi-EO-2.0 fine-tuning for AgriPotential viticulture suitability segmentation.
+
+Architecture:
+  - Backbone: Prithvi-EO-2.0-300M (ViT, pretrained on Sentinel-2 / HLS time series)
+  - Head:     UperNet segmentation head via TerraTorch
+  - Loss:     Ordinal BCE over K-1 = 4 cumulative thresholds
+
+Input: (B, T, C=6, H, W) — 6 HLS bands selected from the 10 S2 bands.
+TerraTorch expects (B, C, T, H, W), so we permute before the forward pass.
+"""
+
 import lightning.pytorch as pl
-import terratorch.models.backbones.scalemae
 import torch
 import torch.nn as nn
-from terratorch.models.pixel_wise_model import PixelWiseModel
-from terratorch.models import EncoderDecoderFactory, PrithviModelFactory
+from terratorch.models import PrithviModelFactory
+
 
 model_factory = PrithviModelFactory()
 
-def pm1_accuracy(pred, target, ignore_index=0):
+
+def pm1_accuracy(pred: torch.Tensor, target: torch.Tensor, ignore_index: int = 0) -> float:
     mask = target != ignore_index
     if not torch.any(mask):
         return 0.0
     err = (pred[mask] - target[mask]).abs()
     return (err <= 1).float().mean().item()
 
+
 def ordinal_loss_step(
     logits: torch.Tensor, target: torch.Tensor, ignore_index: int = 0
 ) -> torch.Tensor:
-    """Computes binary cross entropy over K-1 cumulative thresholds."""
+    """Binary cross-entropy over K-1 cumulative ordinal thresholds."""
     mask = target != ignore_index
     if mask.sum() == 0:
         return logits.sum() * 0.0
 
-    # target is [1, 5], so target - 2 creates the thresholds offset
-    ordinal_targets = torch.zeros(
-        (target.size(0), target.size(1), target.size(2), logits.size(1)),
-        dtype=torch.float32,
-        device=target.device,
-    )
-    for k in range(logits.size(1)):
-        ordinal_targets[:, :, :, k] = (target >= (k + 2)).float()
-
-    ordinal_targets = ordinal_targets.permute(0, 3, 1, 2)  # (B, K-1, H, W)
+    n_thresholds = logits.shape[1]
+    # threshold k fires when true class >= k+2  (classes are 1–5)
+    thresholds = torch.arange(2, n_thresholds + 2, device=target.device)
+    ordinal_targets = (target.unsqueeze(1) >= thresholds[None, :, None, None]).float()
     mask_expanded = mask.unsqueeze(1).expand_as(logits)
 
     return nn.functional.binary_cross_entropy_with_logits(
         logits[mask_expanded], ordinal_targets[mask_expanded]
     )
 
-class PrithviLightning(pl.LightningModule):
+
+class PrithviSegmentation(pl.LightningModule):
+    """
+    Wraps Prithvi-EO-2.0 + UperNet head in a Lightning module.
+
+    The TerraTorch PixelWiseModel expects input in (B, C, T, H, W) order.
+    We accept (B, T, C, H, W) from the dataloader and permute internally.
+    """
+
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
         self.save_hyperparameters()
 
-        # We construct PixelwiseModel from TerraTorch. 
-        # By default we map our (B, T, C, H, W) to (B, C, T, H, W).
-        # We will process in chunks of 4 frames or 2 frames to avoid OOM or 
-        # position embedding mismatches if the backbone expects a specific num_frames.
-        # prithvi_eo_v2_300 expects 6 bands.
-        self.frames_per_chunk = 2
-
+        # TerraTorch builds the backbone + UperNet head in one call.
+        # backbone_num_frames must match the number of timesteps we pass in.
+        # Prithvi-EO-2.0 uses sin/cos 3D positional encodings, so it
+        # generalises to arbitrary T without retraining.
         self.model = model_factory.build_model(
-            task='segmentation',
+            task="segmentation",
             backbone=cfg.backbone,
-            backbone_pretrained=True, # Automatically fetch from huggingface
+            backbone_pretrained=True,
             backbone_in_channels=6,
-            backbone_num_frames=self.frames_per_chunk,
-            num_classes=cfg.num_classes - 1, # K-1 for ordinal
-            head_params={"in_channels": 1024, "decoder_channels": 256, "head_dropout": 0.2}, 
-            # 1024 is standard for 300M parameters, using a FPN or UperNet head.
-            # Using FC head is default in terratorch for some, we let PixelwiseModel infer.
+            backbone_num_frames=cfg.num_frames,
+            num_classes=cfg.num_classes - 1,  # K-1 ordinal thresholds
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        x: (B, T, C, H, W)
+        Args:
+            x: (B, T, C, H, W)  — dataloader format
+        Returns:
+            logits: (B, K-1, H, W)
         """
-        # We will pad T=34 to T=34 or whatever to be divisible by frames_per_chunk
-        B, T, C, H, W = x.shape
-        padded_T = ((T + self.frames_per_chunk - 1) // self.frames_per_chunk) * self.frames_per_chunk
-        
-        if padded_T != T:
-            # Pad by repeating the last frame
-            pad_frames = padded_T - T
-            last_frame = x[:, -1:, :, :, :].repeat(1, pad_frames, 1, 1, 1)
-            x_padded = torch.cat([x, last_frame], dim=1)
-        else:
-            x_padded = x
-            
-        chunks = x_padded.chunk(padded_T // self.frames_per_chunk, dim=1)
-        logits_list = []
-        for chunk in chunks:
-            # chunk: (B, T_chunk, C, H, W) -> we need (B, C, T_chunk, H, W) for TerraTorch
-            chunk_input = chunk.permute(0, 2, 1, 3, 4)
-            logits = self.model(chunk_input) # (B, K-1, H, W)
-            logits_list.append(logits)
-            
-        # Average logits over temporal chunks
-        avg_logits = torch.stack(logits_list, dim=0).mean(dim=0)
-        return avg_logits
+        # TerraTorch expects (B, C, T, H, W)
+        return self.model(x.permute(0, 2, 1, 3, 4))
 
     def training_step(self, batch, batch_idx):
         x, y, _doys = batch
         logits = self(x)
-        loss = ordinal_loss_step(logits, y, ignore_index=self.cfg.ignore_index)
-        
-        # log metrics
+        loss = ordinal_loss_step(logits, y, self.cfg.ignore_index)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y, _doys = batch
         logits = self(x)
-        loss = ordinal_loss_step(logits, y, ignore_index=self.cfg.ignore_index)
-        
+        loss = ordinal_loss_step(logits, y, self.cfg.ignore_index)
         preds = (logits.sigmoid() > 0.5).sum(dim=1) + 1
-        acc_pm1 = pm1_accuracy(preds, y, self.cfg.ignore_index)
-        
+        acc = pm1_accuracy(preds, y, self.cfg.ignore_index)
         self.log("val_loss", loss, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("val_pm1", acc_pm1, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val_pm1", acc, on_epoch=True, prog_bar=True, sync_dist=True)
 
     def configure_optimizers(self):
-        # We can implement a separate learning rate for backbone vs head
-        head_params = []
-        backbone_params = []
+        # Differential LR: backbone gets 10× smaller LR than head
+        backbone_params, head_params = [], []
         for name, param in self.model.named_parameters():
             if "backbone" in name:
                 backbone_params.append(param)
@@ -128,5 +114,7 @@ class PrithviLightning(pl.LightningModule):
             ],
             weight_decay=self.cfg.weight_decay,
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cfg.epochs)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.cfg.epochs
+        )
         return {"optimizer": optimizer, "lr_scheduler": scheduler}

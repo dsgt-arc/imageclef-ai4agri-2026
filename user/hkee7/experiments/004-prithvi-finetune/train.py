@@ -1,3 +1,12 @@
+"""
+Fine-tune Prithvi-EO-2.0-300M on AgriPotential viticulture suitability.
+
+Usage:
+    uv run python train.py                              # defaults
+    uv run python train.py --epochs 50 --batch-size 4  # override
+    uv run python train.py --resume artifacts/last.ckpt # resume from checkpoint
+"""
+
 import argparse
 import os
 
@@ -5,19 +14,21 @@ import torch
 from config import Config
 from dataset import ChunkAwareSampler, PrithviDataset
 from lightning.pytorch import Trainer
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 from lightning.pytorch.loggers import CSVLogger
-from model import PrithviLightning
+from model import PrithviSegmentation
 from torch.utils.data import DataLoader
 
-def train(cfg: Config):
+
+def train(cfg: Config, resume: str | None = None):
     torch.manual_seed(cfg.seed)
     os.makedirs(cfg.save_dir, exist_ok=True)
 
     print("Loading datasets …")
     train_ds = PrithviDataset("train", cfg.data_path, cfg.metadata_path, augment=cfg.augment)
-    val_ds = PrithviDataset("val", cfg.data_path, cfg.metadata_path, augment=False)
-    
+    val_ds   = PrithviDataset("val",   cfg.data_path, cfg.metadata_path, augment=False)
+    print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
+
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg.batch_size,
@@ -33,39 +44,65 @@ def train(cfg: Config):
         pin_memory=cfg.pin_memory,
     )
 
-    print("Building PrithviLightning model …")
-    model = PrithviLightning(cfg)
+    print(f"Building PrithviSegmentation (backbone={cfg.backbone}, T={cfg.num_frames}) …")
+    model = PrithviSegmentation(cfg)
 
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=cfg.save_dir,
-        filename="best_prithvi_{epoch:02d}_{val_pm1:.4f}",
-        save_top_k=1,
-        verbose=True,
-        monitor="val_pm1",
-        mode="max",
-    )
-    
-    logger = CSVLogger(cfg.save_dir, name="logs")
+    callbacks = [
+        ModelCheckpoint(
+            dirpath=cfg.save_dir,
+            filename="best_{epoch:03d}_{val_pm1:.4f}",
+            save_top_k=1,
+            monitor="val_pm1",
+            mode="max",
+            verbose=True,
+        ),
+        # Also keep a rolling last checkpoint for resuming
+        ModelCheckpoint(
+            dirpath=cfg.save_dir,
+            filename="last",
+            every_n_epochs=1,
+            save_top_k=1,
+        ),
+        LearningRateMonitor(logging_interval="epoch"),
+    ]
 
     trainer = Trainer(
         max_epochs=cfg.epochs,
         accelerator="gpu" if cfg.device == "cuda" else "cpu",
         precision="16-mixed" if cfg.use_amp else "32",
-        callbacks=[checkpoint_callback],
-        logger=logger,
+        gradient_clip_val=cfg.grad_clip,
+        callbacks=callbacks,
+        logger=CSVLogger(cfg.save_dir, name="logs"),
         log_every_n_steps=10,
     )
 
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+    trainer.fit(
+        model,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader,
+        ckpt_path=resume,   # None = fresh start; path = resume
+    )
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("Train Prithvi-EO-2.0 via PyTorch Lightning")
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=40)
+    parser = argparse.ArgumentParser("Fine-tune Prithvi-EO-2.0 on AgriPotential")
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--epochs", type=int)
+    parser.add_argument("--lr", type=float)
+    parser.add_argument("--num-frames", type=int)
+    parser.add_argument("--backbone", type=str)
+    parser.add_argument("--save-dir", type=str)
+    parser.add_argument("--data-path", type=str)
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Path to a .ckpt file to resume training from")
     args = parser.parse_args()
 
     cfg = Config()
-    cfg.batch_size = args.batch_size
-    cfg.epochs = args.epochs
+    resume_path = args.resume
+    for key, value in vars(args).items():
+        if key == "resume":
+            continue
+        if value is not None:
+            setattr(cfg, key.replace("-", "_"), value)
 
-    train(cfg)
+    train(cfg, resume=resume_path)
