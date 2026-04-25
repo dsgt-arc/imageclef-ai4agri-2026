@@ -206,13 +206,16 @@ class PrithviSegmentation(pl.LightningModule):
             if isinstance(raw, (list, tuple)):
                 print(
                     f"[debug-fwd] encoder returned {len(raw)} features; "
-                    f"[0].shape = {raw[0].shape}  [5].shape = {raw[5].shape}",
+                    f"[0].shape = {raw[0].shape}",
                     flush=True,
                 )
             else:
-                print(f"[debug-fwd] encoder returned single tensor: {raw.shape}", flush=True)
+                r = raw.output if hasattr(raw, "output") else raw
+                print(f"[debug-fwd] encoder returned: {r.shape}", flush=True)
 
-        return self.model(x_in)
+        result = self.model(x_in)
+        # PixelWiseModel returns a ModelOutput dataclass; unwrap to plain tensor
+        return result.output if hasattr(result, "output") else result
 
     def training_step(self, batch, batch_idx):
         x, y, _doys = batch
