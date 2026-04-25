@@ -10,12 +10,16 @@ Input: (B, T, C=6, H, W) — 6 HLS bands selected from the 10 S2 bands.
 TerraTorch expects (B, C, T, H, W), so we permute before the forward pass.
 """
 
+import logging
+
 import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 from terratorch.datasets import HLSBands
 from terratorch.models import EncoderDecoderFactory
+from terratorch.registry import BACKBONE_REGISTRY
 
+logger = logging.getLogger(__name__)
 
 model_factory = EncoderDecoderFactory()
 
@@ -28,6 +32,44 @@ _HLS_BANDS = [
     HLSBands.SWIR_1,
     HLSBands.SWIR_2,
 ]
+
+# Embed dim for prithvi_eo_v2_300
+_PRITHVI_300M_EMBED_DIM = 1024
+
+
+def _probe_effective_time_dim(backbone_name: str, bands, num_frames: int, img_size: int) -> int:
+    """Build a lightweight (no-pretrained) backbone to read its actual effective_time_dim.
+
+    PrithviViT sets out_channels[i] = embed_dim * T_patches, where
+    T_patches = input_size[0] / patch_size[0].  Dividing by embed_dim gives us
+    the exact value ReshapeTokensToImage must use, regardless of any internal
+    default that overrides our backbone_num_frames request.
+    """
+    probe = BACKBONE_REGISTRY.build(
+        backbone_name,
+        pretrained=False,
+        bands=bands,
+        num_frames=num_frames,
+        img_size=img_size,
+    )
+    eff_t = probe.out_channels[0] // _PRITHVI_300M_EMBED_DIM
+    del probe
+    logger.info(
+        "[prithvi] probe backbone: out_channels[0]=%d  → effective_time_dim=%d "
+        "(requested num_frames=%d)",
+        eff_t * _PRITHVI_300M_EMBED_DIM,
+        eff_t,
+        num_frames,
+    )
+    if eff_t != num_frames:
+        logger.warning(
+            "[prithvi] effective_time_dim (%d) differs from cfg.num_frames (%d). "
+            "Using %d for ReshapeTokensToImage.",
+            eff_t,
+            num_frames,
+            eff_t,
+        )
+    return eff_t
 
 
 def pm1_accuracy(pred: torch.Tensor, target: torch.Tensor, ignore_index: int = 0) -> float:
@@ -70,18 +112,19 @@ class PrithviSegmentation(pl.LightningModule):
         self.cfg = cfg
         self.save_hyperparameters()
 
+        # Probe the backbone (no pretrained weights) to discover the actual
+        # effective_time_dim.  PrithviViT sets
+        #   out_channels[i] = embed_dim * T_patches
+        # so dividing by embed_dim is always self-consistent with what
+        # ReshapeTokensToImage will actually receive.
+        effective_t = _probe_effective_time_dim(
+            cfg.backbone, _HLS_BANDS, cfg.num_frames, cfg.img_size
+        )
+
         # TerraTorch builds the backbone + UperNet head in one call.
-        # backbone_num_frames must match the number of timesteps we pass in.
-        # Prithvi-EO-2.0 uses sin/cos 3D positional encodings, so it
-        # generalises to arbitrary T without retraining.
-        # Prithvi-EO-2.0 is a ViT with 3-D patch embeddings (patch=16, tubelet=1).
-        # backbone_img_size must match the actual tile size so the backbone emits
-        # exactly num_frames × (img_size/16)² = 11 × 64 = 704 spatial-temporal
-        # tokens (+ 1 cls token = 705 total).
-        #
-        # ReshapeTokensToImage needs effective_time_dim=T so it can split the flat
-        # T×H_p×W_p token sequence and produce (B, T×embed_dim, H_p, W_p) feature maps.
         # SelectIndices picks 4 evenly-spaced transformer layers for UperNet's FPN.
+        # ReshapeTokensToImage converts flat token sequences to spatial feature maps.
+        # LearnedInterpolateToPyramidal creates the multi-scale pyramid for UperNet.
         self.model = model_factory.build_model(
             task="segmentation",
             backbone=cfg.backbone,
@@ -93,7 +136,7 @@ class PrithviSegmentation(pl.LightningModule):
                 {"name": "SelectIndices", "indices": [5, 11, 17, 23]},
                 {
                     "name": "ReshapeTokensToImage",
-                    "effective_time_dim": cfg.num_frames,
+                    "effective_time_dim": effective_t,
                     "remove_cls_token": True,
                 },
                 {"name": "LearnedInterpolateToPyramidal"},
