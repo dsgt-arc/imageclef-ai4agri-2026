@@ -151,6 +151,12 @@ class PrithviSegmentation(pl.LightningModule):
             num_classes=cfg.num_classes - 1,  # K-1 ordinal thresholds
         )
 
+        # Gradient checkpointing: recompute activations on backward pass to save ~60% memory
+        # at the cost of ~30% extra compute. Essential for 34-frame inputs on a 24 GiB GPU.
+        if hasattr(self.model.encoder, "set_grad_checkpointing"):
+            self.model.encoder.set_grad_checkpointing(True)
+            print("[init] gradient checkpointing enabled on backbone", flush=True)
+
         # Inspect the REAL (pretrained) backbone after build to confirm its config
         print("[debug-init] inspecting REAL pretrained encoder:", flush=True)
         for m in self.model.encoder.modules():

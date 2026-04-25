@@ -71,6 +71,7 @@ def train(cfg: Config, resume: str | None = None):
         accelerator="gpu" if cfg.device == "cuda" else "cpu",
         precision="16-mixed" if cfg.use_amp else "32",
         gradient_clip_val=cfg.grad_clip,
+        accumulate_grad_batches=cfg.accumulate_grad_batches,
         callbacks=callbacks,
         logger=CSVLogger(cfg.save_dir, name="logs"),
         log_every_n_steps=10,

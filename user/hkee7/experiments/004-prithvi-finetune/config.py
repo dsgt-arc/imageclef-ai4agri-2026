@@ -22,7 +22,8 @@ class Config:
     img_size: int = 128
 
     # Optimization
-    batch_size: int = 8
+    batch_size: int = 2
+    accumulate_grad_batches: int = 4   # effective batch = batch_size * accumulate_grad_batches
     lr: float = 1e-4
     epochs: int = 50
     weight_decay: float = 0.05
