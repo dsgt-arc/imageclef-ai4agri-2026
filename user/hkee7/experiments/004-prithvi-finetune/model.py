@@ -223,19 +223,25 @@ class PrithviSegmentation(pl.LightningModule):
         self.log("val_pm1", acc, on_epoch=True, prog_bar=True, sync_dist=True)
 
     def configure_optimizers(self):
-        # Differential LR: backbone gets 10× smaller LR than head
+        # When freeze_backbone=True, backbone params have requires_grad=False and
+        # must be excluded — otherwise AdamW allocates fp32 optimizer states for
+        # all 923 M params (~9 GB), exhausting GPU memory before any forward pass.
         backbone_params, head_params = [], []
         for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
             if "backbone" in name:
                 backbone_params.append(param)
             else:
                 head_params.append(param)
 
+        param_groups = [{"params": head_params, "lr": self.cfg.lr}]
+        if backbone_params:
+            # Differential LR: only relevant when freeze_backbone=False
+            param_groups.append({"params": backbone_params, "lr": self.cfg.lr * 0.1})
+
         optimizer = torch.optim.AdamW(
-            [
-                {"params": backbone_params, "lr": self.cfg.lr * 0.1},
-                {"params": head_params, "lr": self.cfg.lr},
-            ],
+            param_groups,
             weight_decay=self.cfg.weight_decay,
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
