@@ -15,8 +15,13 @@ class Config:
     # Prithvi backbone name in terratorch registry
     backbone: str = "prithvi_eo_v2_300"
 
-    # Number of input timesteps (must match dataset; 34 for AgriPotential)
-    num_frames: int = 34
+    # Total timesteps in the dataset tensors
+    num_frames_data: int = 34
+
+    # Timesteps fed to the backbone (uniformly subsampled from num_frames_data).
+    # Attention memory scales as O(T²): 34 frames → 2177 tokens → ~14 GB just for
+    # backbone intermediates across 24 layers.  12 frames → 769 tokens → ~2 GB.
+    num_frames: int = 12
 
     # Spatial tile size in pixels (must match precomputed tensor patches)
     img_size: int = 128

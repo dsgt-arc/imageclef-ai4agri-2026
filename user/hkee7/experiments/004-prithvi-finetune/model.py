@@ -187,6 +187,14 @@ class PrithviSegmentation(pl.LightningModule):
         Returns:
             logits: (B, K-1, H, W)
         """
+        # Uniformly subsample from num_frames_data (34) down to num_frames (12).
+        # Attention scales as O(T²): 34→2177 tokens fills 22 GB; 12→769 tokens is fine.
+        T_data = x.shape[1]
+        T_model = self.cfg.num_frames
+        if T_data != T_model:
+            idx = torch.linspace(0, T_data - 1, T_model, device=x.device).long()
+            x = x[:, idx]
+
         x_in = x.permute(0, 2, 1, 3, 4)  # → (B, C, T, H, W)
 
         # One-time diagnostic: show what the backbone actually emits
