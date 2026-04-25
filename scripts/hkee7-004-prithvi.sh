@@ -24,4 +24,4 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 004-prithvi-finetune
 
 # Run experiment
-uv run user/hkee7/experiments/004-prithvi-finetune/train.py --save-dir runs/prithvi-v1
+srun uv run user/hkee7/experiments/004-prithvi-finetune/train.py --save-dir runs/prithvi-v1

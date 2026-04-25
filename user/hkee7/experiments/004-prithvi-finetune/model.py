@@ -74,17 +74,28 @@ class PrithviSegmentation(pl.LightningModule):
         # backbone_num_frames must match the number of timesteps we pass in.
         # Prithvi-EO-2.0 uses sin/cos 3D positional encodings, so it
         # generalises to arbitrary T without retraining.
-        # Prithvi-EO-2.0 is a ViT; necks reshape patch tokens → spatial feature map.
-        # SelectIndices picks 4 evenly-spaced layers for UperNet's FPN input.
+        # Prithvi-EO-2.0 is a ViT with 3-D patch embeddings (patch=16, tubelet=1).
+        # backbone_img_size must match the actual tile size so the backbone emits
+        # exactly num_frames × (img_size/16)² = 11 × 64 = 704 spatial-temporal
+        # tokens (+ 1 cls token = 705 total).
+        #
+        # ReshapeTokensToImage needs effective_time_dim=T so it can split the flat
+        # T×H_p×W_p token sequence and produce (B, T×embed_dim, H_p, W_p) feature maps.
+        # SelectIndices picks 4 evenly-spaced transformer layers for UperNet's FPN.
         self.model = model_factory.build_model(
             task="segmentation",
             backbone=cfg.backbone,
             backbone_pretrained=True,
             backbone_bands=_HLS_BANDS,
             backbone_num_frames=cfg.num_frames,
+            backbone_img_size=cfg.img_size,
             necks=[
                 {"name": "SelectIndices", "indices": [5, 11, 17, 23]},
-                {"name": "ReshapeTokensToImage"},
+                {
+                    "name": "ReshapeTokensToImage",
+                    "effective_time_dim": cfg.num_frames,
+                    "remove_cls_token": True,
+                },
                 {"name": "LearnedInterpolateToPyramidal"},
             ],
             decoder="UperNetDecoder",

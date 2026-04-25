@@ -18,6 +18,9 @@ class Config:
     # Number of input timesteps (must match dataset; 11 for AgriPotential)
     num_frames: int = 11
 
+    # Spatial tile size in pixels (must match precomputed tensor patches)
+    img_size: int = 128
+
     # Optimization
     batch_size: int = 8
     lr: float = 1e-4
