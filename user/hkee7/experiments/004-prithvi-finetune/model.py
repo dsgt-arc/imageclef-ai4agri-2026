@@ -13,10 +13,21 @@ TerraTorch expects (B, C, T, H, W), so we permute before the forward pass.
 import lightning.pytorch as pl
 import torch
 import torch.nn as nn
-from terratorch.models import PrithviModelFactory
+from terratorch.datasets import HLSBands
+from terratorch.models import EncoderDecoderFactory
 
 
-model_factory = PrithviModelFactory()
+model_factory = EncoderDecoderFactory()
+
+# 6 HLS bands Prithvi-EO-2.0 was pretrained on
+_HLS_BANDS = [
+    HLSBands.BLUE,
+    HLSBands.GREEN,
+    HLSBands.RED,
+    HLSBands.NIR_NARROW,
+    HLSBands.SWIR_1,
+    HLSBands.SWIR_2,
+]
 
 
 def pm1_accuracy(pred: torch.Tensor, target: torch.Tensor, ignore_index: int = 0) -> float:
@@ -63,12 +74,22 @@ class PrithviSegmentation(pl.LightningModule):
         # backbone_num_frames must match the number of timesteps we pass in.
         # Prithvi-EO-2.0 uses sin/cos 3D positional encodings, so it
         # generalises to arbitrary T without retraining.
+        # Prithvi-EO-2.0 is a ViT; necks reshape patch tokens → spatial feature map.
+        # SelectIndices picks 4 evenly-spaced layers for UperNet's FPN input.
         self.model = model_factory.build_model(
             task="segmentation",
             backbone=cfg.backbone,
             backbone_pretrained=True,
-            backbone_in_channels=6,
+            backbone_bands=_HLS_BANDS,
             backbone_num_frames=cfg.num_frames,
+            necks=[
+                {"name": "SelectIndices", "indices": [5, 11, 17, 23]},
+                {"name": "ReshapeTokensToImage"},
+                {"name": "LearnedInterpolateToPyramidal"},
+            ],
+            decoder="UperNetDecoder",
+            decoder_channels=256,
+            head_dropout=0.1,
             num_classes=cfg.num_classes - 1,  # K-1 ordinal thresholds
         )
 
