@@ -22,6 +22,8 @@ from torch.utils.data import DataLoader
 def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
     print(f"Loading checkpoint: {checkpoint_path}")
 
+    # PyTorch 2.6 defaults weights_only=True, which blocks custom classes like Config.
+    torch.serialization.add_safe_globals([Config])
     model = PrithviSegmentation.load_from_checkpoint(checkpoint_path, cfg=cfg)
     model.eval()
     model.to(cfg.device)
