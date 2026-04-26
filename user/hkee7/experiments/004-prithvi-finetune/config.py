@@ -34,17 +34,17 @@ class Config:
     epochs: int = 50
     weight_decay: float = 0.05
     grad_clip: float = 1.0
-    # AMP disabled: cuDNN BatchNorm with bf16/fp16 is broken on Blackwell with
-    # the current cuDNN version. fp32 fits easily on 96 GB and avoids the issue.
-    use_amp: bool = False
-    precision: str = "bf16-mixed"  # only used when use_amp=True
+    use_amp: bool = True
+    precision: str = "bf16-mixed"
 
     # Full backbone fine-tuning — requires ≥40 GB GPU (96 GB RTX 6000 Blackwell).
     # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
     freeze_backbone: bool = False
 
-    # Dataloader — num_workers=0 avoids IPC socket crashes on PACE
-    num_workers: int = 4
+    # num_workers=0: each worker loads a full chunk (~GB) into RAM; with 4 workers
+    # the combined footprint can silently exceed the cgroup mem limit → SIGKILL.
+    # Single-process loading is slower but safe on networked PACE storage.
+    num_workers: int = 0
     pin_memory: bool = False
     augment: bool = True
 
