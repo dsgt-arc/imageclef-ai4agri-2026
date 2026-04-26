@@ -24,4 +24,4 @@ cd ~/ps-clef2026_img_ai4agri-0/imageclef-ai4agri-2026 || exit
 uv sync --package 007-satlas-finetune
 
 # Run experiment
-uv run user/hkee7/experiments/007-satlas-finetune/train.py --save-dir /storage/project/ps-clef2026_img_ai4agri-0/hkee7/imageclef-ai4agri-2026/runs/satlas-v3-stacked
+srun uv run user/hkee7/experiments/007-satlas-finetune/train.py --save-dir /storage/project/ps-clef2026_img_ai4agri-0/hkee7/imageclef-ai4agri-2026/runs/satlas-v3-stacked
