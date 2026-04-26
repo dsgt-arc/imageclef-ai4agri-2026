@@ -25,8 +25,8 @@ def train(cfg: Config, resume: str | None = None):
     os.makedirs(cfg.save_dir, exist_ok=True)
 
     print("Loading datasets …")
-    train_ds = PrithviDataset("train", cfg.data_path, cfg.metadata_path, augment=cfg.augment)
-    val_ds   = PrithviDataset("val",   cfg.data_path, cfg.metadata_path, augment=False)
+    train_ds = PrithviDataset("train", cfg.data_path, cfg.metadata_path, augment=cfg.augment, seasonal_composite=cfg.seasonal_composite)
+    val_ds   = PrithviDataset("val",   cfg.data_path, cfg.metadata_path, augment=False, seasonal_composite=cfg.seasonal_composite)
     print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
 
     train_loader = DataLoader(

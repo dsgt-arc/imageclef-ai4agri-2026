@@ -28,7 +28,7 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
     model.eval()
     model.to(cfg.device)
 
-    test_ds = PrithviDataset("test", cfg.data_path, cfg.metadata_path, augment=False)
+    test_ds = PrithviDataset("test", cfg.data_path, cfg.metadata_path, augment=False, seasonal_composite=cfg.seasonal_composite)
     loader = DataLoader(
         test_ds,
         batch_size=cfg.batch_size,

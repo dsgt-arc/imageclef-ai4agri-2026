@@ -16,9 +16,15 @@ class PrithviDataset(Dataset):
     Filters the 10 S2 bands to the 6 bands required by Prithvi-EO-1.0/2.0:
     Blue, Green, Red, Narrow NIR, SWIR1, SWIR2.
 
+    When seasonal_composite=True (recommended), the 34 raw timesteps are
+    averaged within each of 4 meteorological seasons (Winter/Spring/Summer/Autumn),
+    returning T=4 composites instead of T=34 raw frames.  This collapses the
+    redundant multi-year temporal dimension into a compact seasonal signature,
+    matching the static nature of the viticulture suitability label.
+
     Returns
     -------
-    data       : Tensor[float32] — (T, C=6, H, W)
+    data       : Tensor[float32] — (T, C=6, H, W)   T=4 (seasonal) or T=34 (raw)
     label      : Tensor[long]    — (H, W)
     doys       : Tensor[float32] — (T,)
     """
@@ -29,6 +35,7 @@ class PrithviDataset(Dataset):
         chunk_dir: str = "data/precomputed_tensors",
         metadata_path: str = "data/agripotential/metadata.csv",
         augment: bool = False,
+        seasonal_composite: bool = False,
     ):
         self.chunk_dir = os.path.join(chunk_dir, mode)
         chunk_files = sorted(f for f in os.listdir(self.chunk_dir) if f.endswith(".pt"))
@@ -40,9 +47,14 @@ class PrithviDataset(Dataset):
             self.index.extend((f, i) for i in range(n))
 
         self.augment = augment
+        self.seasonal_composite = seasonal_composite
 
         meta = pl.read_csv(metadata_path)
-        self.doys = torch.from_numpy(_parse_doys(meta)).float()
+        if seasonal_composite:
+            self.seasonal_indices, seasonal_doys = _parse_seasonal_indices(meta)
+            self.doys = torch.from_numpy(seasonal_doys)
+        else:
+            self.doys = torch.from_numpy(_parse_doys(meta)).float()
 
         self._cache_file: str | None = None
         self._cache_data = None
@@ -69,9 +81,16 @@ class PrithviDataset(Dataset):
             ))
             self._cache_ids = payload.get("patch_ids", [])
 
-        # Slicing the correct bands
+        # Load all timesteps for this patch, select 6 HLS bands
         data = self._cache_data[patch_idx, :, self.band_indices, :, :].float() / REFLECTANCE_SCALE
-        data = data.clamp(0.0, 1.0)
+        data = data.clamp(0.0, 1.0)  # (34, 6, H, W)
+
+        if self.seasonal_composite:
+            # Average within each season → (4, 6, H, W): [Winter, Spring, Summer, Autumn]
+            data = torch.stack([
+                data[torch.from_numpy(idx)].mean(dim=0)
+                for idx in self.seasonal_indices
+            ])
         label = self._cache_label[patch_idx]
         
         # We also support test mode which needs patch_ids
@@ -128,6 +147,46 @@ def _random_spatial_augment(
         data = torch.rot90(data, k, dims=(-2, -1))
         label = torch.rot90(label, k, dims=(-2, -1))
     return data, label
+
+
+def _month_to_season(month: int) -> int:
+    """Meteorological season index: 0=Winter, 1=Spring, 2=Summer, 3=Autumn."""
+    if month in (12, 1, 2):
+        return 0
+    if month in (3, 4, 5):
+        return 1
+    if month in (6, 7, 8):
+        return 2
+    return 3  # 9, 10, 11
+
+
+def _parse_seasonal_indices(
+    meta: pl.DataFrame,
+) -> tuple[list[np.ndarray], np.ndarray]:
+    """
+    Group the 34 raw timesteps into 4 meteorological seasons.
+
+    Returns
+    -------
+    seasonal_indices : list of 4 int arrays — timestep indices per season
+                       order: [Winter, Spring, Summer, Autumn]
+    seasonal_doys    : (4,) float32 — mean day-of-year per season composite
+    """
+    months = meta.get_column("month").cast(pl.Int32).to_numpy()
+    doys = _parse_doys(meta)
+    season_ids = np.array([_month_to_season(int(m)) for m in months])
+
+    seasonal_indices = [np.where(season_ids == s)[0] for s in range(4)]
+    # Representative DOY: mean of frames in each season (fallback to mid-season)
+    fallback_doys = np.array([15.0, 105.0, 196.0, 288.0], dtype=np.float32)
+    seasonal_doys = np.array(
+        [
+            float(doys[idx].mean()) if len(idx) > 0 else fallback_doys[s]
+            for s, idx in enumerate(seasonal_indices)
+        ],
+        dtype=np.float32,
+    )
+    return seasonal_indices, seasonal_doys
 
 
 def _parse_doys(meta: pl.DataFrame) -> np.ndarray:

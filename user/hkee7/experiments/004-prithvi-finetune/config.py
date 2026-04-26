@@ -18,11 +18,13 @@ class Config:
     # Total timesteps in the dataset tensors
     num_frames_data: int = 34
 
-    # Timesteps fed to the backbone (uniformly subsampled from num_frames_data).
-    # LearnedInterpolateToPyramidal params scale as O(T²): 34 frames → 5.9B params,
-    # 71 GB optimizer states alone.  12 frames → ~430M neck params, fits on 96 GB.
-    # Backbone still fine-tunes end-to-end; temporal coverage traded for feasibility.
-    num_frames: int = 12
+    # Seasonal compositing: average the 34 raw frames within each of 4 meteorological
+    # seasons (Winter/Spring/Summer/Autumn) before feeding to the backbone.
+    # Reduces T from 34→4, collapsing redundant multi-year coverage into a compact
+    # seasonal signature that matches the static viticulture suitability label.
+    # Also shrinks LearnedInterpolateToPyramidal from 5.9B → ~50M params.
+    seasonal_composite: bool = True
+    num_frames: int = 4   # must equal 4 when seasonal_composite=True
 
     # Spatial tile size in pixels (must match precomputed tensor patches)
     img_size: int = 128
@@ -31,10 +33,9 @@ class Config:
     # Without working gradient checkpointing, all 24 ViT blocks store activations:
     # ~1.9 GB/block at batch=2 → 22 GB activations + 18 GB optimizer = 40 GB peak.
     # batch=4 → 44+18=62 GB which tips over 95 GB during validation overlap.
-    # With 12 frames and full backbone: ~1B params, ~12 GB optimizer, ~6 GB activations
-    # at batch=4 → ~20 GB total, very comfortable on 96 GB.
-    batch_size: int = 4
-    accumulate_grad_batches: int = 4   # effective batch = 16
+    # With 4 seasonal frames: ~350M params total, very comfortable on any GPU.
+    batch_size: int = 8
+    accumulate_grad_batches: int = 2   # effective batch = 16
     lr: float = 1e-4
     epochs: int = 50
     weight_decay: float = 0.05
