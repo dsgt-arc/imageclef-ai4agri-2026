@@ -48,8 +48,10 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
             with torch.autocast(cfg.device, enabled=cfg.use_amp):
                 logits = model(data)                          # (B, K-1, H, W)
 
-            preds = (logits.sigmoid() > 0.5).sum(dim=1) + 1  # → [1, 5]
-            preds = preds.long().clamp(1, 5)                  # safety clamp
+            preds = (logits.sigmoid() > 0.5).sum(dim=1) + 1  # → [1, 5] training space
+            # Clamp to [2, 4] for ±1 safety at extremes, then subtract 1 for
+            # submission space [0, 4] (competition expects 0=very_low … 4=very_high)
+            preds = preds.long().clamp(2, 4) - 1             # → [1, 3] submission space
 
             for pred, pid in zip(preds.cpu().numpy(), patch_ids):
                 img = Image.fromarray(pred.astype(np.uint8), mode="L")
