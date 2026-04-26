@@ -45,7 +45,8 @@ def predict(checkpoint_path: str, cfg: Config, output_dir: str = "submission"):
         for data, _labels, _doys, patch_ids in loader:
             data = data.to(cfg.device, non_blocking=True)
 
-            with torch.autocast(cfg.device, enabled=cfg.use_amp):
+            amp_dtype = torch.bfloat16 if "bf16" in cfg.precision else torch.float16
+            with torch.autocast(cfg.device, dtype=amp_dtype, enabled=cfg.use_amp):
                 logits = model(data)                          # (B, K-1, H, W)
 
             preds = (logits.sigmoid() > 0.5).sum(dim=1) + 1  # → [1, 5] training space

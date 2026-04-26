@@ -35,6 +35,8 @@ class Config:
     weight_decay: float = 0.05
     grad_clip: float = 1.0
     use_amp: bool = True
+    # Blackwell GPUs require bf16-mixed; older GPUs can use 16-mixed or 32
+    precision: str = "bf16-mixed"
 
     # Full backbone fine-tuning — requires ≥40 GB GPU (96 GB RTX 6000 Blackwell).
     # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
