@@ -124,6 +124,7 @@ class SatlasSegmentation(pl.LightningModule):
             features_only=True,
             in_chans=cfg.in_channels,
             out_indices=(0, 1, 2, 3),  # strides: 4, 8, 16, 32
+            img_size=cfg.img_size,     # resize positional embeddings from 256 → 128
         )
 
         if cfg.satlas_checkpoint:
