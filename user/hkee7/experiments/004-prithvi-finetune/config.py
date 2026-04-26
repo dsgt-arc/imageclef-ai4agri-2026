@@ -43,7 +43,7 @@ class Config:
     # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
     freeze_backbone: bool = False
 
-    num_workers: int = 4
+    num_workers: int = 0
     pin_memory: bool = False
     augment: bool = True
 
