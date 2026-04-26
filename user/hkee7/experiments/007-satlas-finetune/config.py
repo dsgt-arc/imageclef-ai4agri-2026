@@ -22,10 +22,10 @@ class Config:
     # Download from: https://huggingface.co/allenai/satlas-pretrain
     satlas_checkpoint: str = ""
 
-    # 10 S2 bands × 4 temporal statistics (mean, std, min, max) = 40 channels.
-    # Treating multi-temporal frames as channel-wise statistics avoids the
-    # temporal ordering assumption and matches how UNet currently sees the data.
-    in_channels: int = 40
+    # 34 timesteps × 10 S2 bands stacked as channels = 340.
+    # Matches the organiser's stacked approach; pretrained Swin backbone
+    # replaces the from-scratch UNet encoder.
+    in_channels: int = 340
     fpn_channels: int = 256
 
     # ---- Task ---------------------------------------------------------------

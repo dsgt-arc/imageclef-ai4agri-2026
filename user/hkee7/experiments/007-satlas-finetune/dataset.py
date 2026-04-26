@@ -1,12 +1,12 @@
 """
-Dataset for the SatLas experiment.
+Dataset for the SatLas stacked-channel experiment.
 
-Returns per-pixel temporal statistics over all 34 acquisitions across all
-10 Sentinel-2 bands: mean, std, min, max → 40 input channels total.
+All 34 timesteps × 10 bands are stacked into a single (340, H, W) tensor,
+matching the organiser's stacked-channel approach — but fed to a pretrained
+Swin-V2-B backbone instead of a from-scratch UNet.
 
-This deliberately collapses the temporal axis into summary statistics rather
-than modelling time explicitly. The Swin-V2-B backbone then treats the 40-channel
-tensor like a multi-spectral image with richer spectral diversity.
+Normalisation: per-patch z-score across all 340 channels, making the model
+invariant to absolute reflectance levels that vary across geographic regions.
 """
 
 import os
@@ -23,13 +23,12 @@ class SatlasDataset(Dataset):
     """
     Map-style dataset over precomputed AgriPotential chunks.
 
-    Loads all 10 S2 bands across all 34 timesteps and computes four
-    per-band temporal statistics (mean, std, min, max), yielding a
-    (40, H, W) feature tensor ready for a standard image backbone.
+    Stacks all 34 timesteps × 10 bands → (340, H, W) input tensor,
+    then z-score normalises per patch to remove region-level reflectance bias.
 
     Returns
     -------
-    features   : Tensor[float32] — (C=40, H, W)
+    features   : Tensor[float32] — (C=340, H, W)
     label      : Tensor[long]    — (H, W)
     patch_id   : str             — unique patch identifier (test mode only)
     """
@@ -81,14 +80,16 @@ class SatlasDataset(Dataset):
         data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE
         data = data.clamp(0.0, 1.0)
 
-        features = _temporal_stats(data)  # (40, H, W)
+        # Stack all timesteps into channels: (T, C, H, W) → (T*C, H, W)
+        T, C, H, W = data.shape
+        features = data.reshape(T * C, H, W)   # (340, H, W)
 
-        # Per-patch z-score normalisation: remove absolute reflectance level so the
-        # model sees relative spectral patterns.  Test patches come from different
-        # regions with different absolute levels; this makes features region-invariant.
-        mean = features.mean(dim=(-2, -1), keepdim=True)   # (40, 1, 1)
+        # Per-patch z-score: subtract each channel's spatial mean, divide by std.
+        # Removes absolute reflectance bias so the model learns relative patterns.
+        mean = features.mean(dim=(-2, -1), keepdim=True)          # (340, 1, 1)
         std  = features.std(dim=(-2, -1), keepdim=True).clamp(min=1e-6)
         features = (features - mean) / std
+
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx] if len(self._cache_ids) > 0 else ""
 
@@ -98,22 +99,6 @@ class SatlasDataset(Dataset):
         if self.mode == "test":
             return features, label, patch_id
         return features, label
-
-
-def _temporal_stats(data: torch.Tensor) -> torch.Tensor:
-    """Compute (mean, std, min, max) over T=34 for each of the 10 bands.
-
-    Args:
-        data: (T, C, H, W) float32
-
-    Returns:
-        (4*C, H, W) float32 — [mean_B1..B10, std_B1..B10, min_B1..B10, max_B1..B10]
-    """
-    mean = data.mean(dim=0)             # (C, H, W)
-    std  = data.std(dim=0)              # (C, H, W)
-    vmin = data.amin(dim=0)             # (C, H, W)
-    vmax = data.amax(dim=0)             # (C, H, W)
-    return torch.cat([mean, std, vmin, vmax], dim=0)  # (4C, H, W)
 
 
 class ChunkAwareSampler(Sampler):
