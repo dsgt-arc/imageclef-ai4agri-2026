@@ -15,7 +15,8 @@ import torch
 import torch.nn as nn
 from terratorch.datasets import HLSBands
 from terratorch.models import EncoderDecoderFactory
-from terratorch.registry import BACKBONE_REGISTRY
+from terratorch.models.necks import Neck
+from terratorch.registry import BACKBONE_REGISTRY, TERRATORCH_NECK_REGISTRY
 
 model_factory = EncoderDecoderFactory()
 
@@ -31,6 +32,36 @@ _HLS_BANDS = [
 
 # Embed dim for prithvi_eo_v2_300
 _PRITHVI_300M_EMBED_DIM = 1024
+
+
+@TERRATORCH_NECK_REGISTRY.register
+class TemporalMeanPool(Neck):
+    """Collapse the temporal dimension by mean-pooling after ReshapeTokensToImage.
+
+    ReshapeTokensToImage outputs (B, T*embed_dim, H_p, W_p) — it folds the
+    temporal patches into the channel axis.  This neck reshapes to
+    (B, T, embed_dim, H_p, W_p), averages over T, and returns (B, embed_dim, H_p, W_p).
+
+    The channel_list shrinks from [T*embed_dim, ...] to [embed_dim, ...], so the
+    downstream InterpolateToPyramidal neck sees only embed_dim channels —
+    avoiding the O(T²) parameter explosion of LearnedInterpolateToPyramidal.
+    """
+
+    def __init__(self, channel_list: list[int], effective_time_dim: int, embed_dim: int):
+        super().__init__(channel_list)
+        self.T = effective_time_dim
+        self.C = embed_dim
+
+    def forward(self, features: list[torch.Tensor], **kwargs) -> list[torch.Tensor]:
+        out = []
+        for x in features:
+            B, TC, H, W = x.shape
+            x = x.reshape(B, self.T, self.C, H, W).mean(dim=1)  # (B, C, H, W)
+            out.append(x)
+        return out
+
+    def process_channel_list(self, channel_list: list[int]) -> list[int]:
+        return [self.C] * len(channel_list)
 
 
 def _probe_effective_time_dim(backbone_name: str, bands, num_frames: int, img_size: int) -> int:
@@ -126,9 +157,13 @@ class PrithviSegmentation(pl.LightningModule):
         )
 
         # TerraTorch builds the backbone + UperNet head in one call.
-        # SelectIndices picks 4 evenly-spaced transformer layers for UperNet's FPN.
-        # ReshapeTokensToImage converts flat token sequences to spatial feature maps.
-        # LearnedInterpolateToPyramidal creates the multi-scale pyramid for UperNet.
+        # Neck pipeline:
+        #   SelectIndices        → 4 × (B, T*H_p*W_p+1, embed_dim) token lists
+        #   ReshapeTokensToImage → 4 × (B, T*embed_dim, H_p, W_p) spatial maps
+        #   TemporalMeanPool     → 4 × (B, embed_dim, H_p, W_p)  [no learned params]
+        #   InterpolateToPyramidal → 4-scale pyramid  [bilinear, no BatchNorm]
+        # Using InterpolateToPyramidal (not Learned) avoids BatchNorm cuDNN crashes
+        # on Blackwell GPUs and keeps param count at ~300M regardless of num_frames.
         self.model = model_factory.build_model(
             task="segmentation",
             backbone=cfg.backbone,
@@ -143,7 +178,12 @@ class PrithviSegmentation(pl.LightningModule):
                     "effective_time_dim": effective_t,
                     "remove_cls_token": True,
                 },
-                {"name": "LearnedInterpolateToPyramidal"},
+                {
+                    "name": "TemporalMeanPool",
+                    "effective_time_dim": effective_t,
+                    "embed_dim": _PRITHVI_300M_EMBED_DIM,
+                },
+                {"name": "InterpolateToPyramidal", "scale_factor": 2, "mode": "nearest"},
             ],
             decoder="UperNetDecoder",
             decoder_channels=256,
@@ -196,14 +236,6 @@ class PrithviSegmentation(pl.LightningModule):
         Returns:
             logits: (B, K-1, H, W)
         """
-        # Uniformly subsample from num_frames_data (34) down to num_frames (12).
-        # Attention scales as O(T²): 34→2177 tokens fills 22 GB; 12→769 tokens is fine.
-        T_data = x.shape[1]
-        T_model = self.cfg.num_frames
-        if T_data != T_model:
-            idx = torch.linspace(0, T_data - 1, T_model, device=x.device).long()
-            x = x[:, idx]
-
         x_in = x.permute(0, 2, 1, 3, 4)  # → (B, C, T, H, W)
 
         # One-time diagnostic: show what the backbone actually emits

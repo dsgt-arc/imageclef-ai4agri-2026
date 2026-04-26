@@ -1,0 +1,15 @@
+[project]
+name = "007-satlas-finetune"
+version = "0.1.0"
+description = "Swin-V2-B (SatLas/ImageNet-22k) + FPN for viticulture suitability — treats 34 timeframes as temporal statistics channels"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.1.0",
+    "torchvision",
+    "lightning",
+    "timm",
+    "huggingface-hub",
+    "polars",
+    "pillow",
+]
