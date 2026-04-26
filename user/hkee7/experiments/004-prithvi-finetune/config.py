@@ -19,19 +19,22 @@ class Config:
     num_frames_data: int = 34
 
     # Timesteps fed to the backbone (uniformly subsampled from num_frames_data).
-    # On RTX 6000 Blackwell (96 GB) all 34 frames fit with full fine-tuning.
-    # On smaller GPUs (22 GB) use num_frames=12 with freeze_backbone=True.
-    num_frames: int = 34
+    # LearnedInterpolateToPyramidal params scale as O(T²): 34 frames → 5.9B params,
+    # 71 GB optimizer states alone.  12 frames → ~430M neck params, fits on 96 GB.
+    # Backbone still fine-tunes end-to-end; temporal coverage traded for feasibility.
+    num_frames: int = 12
 
     # Spatial tile size in pixels (must match precomputed tensor patches)
     img_size: int = 128
 
     # Optimization
-    # set_grad_checkpointing doesn't fire in PrithviViT's custom forward, so all
-    # 24 transformer blocks store their activations: ~3.7 GB/block × 24 = 89 GB
-    # at batch=8.  batch=4 needs ~57 GB (fits in 95 GB); effective batch kept at 16.
+    # Without working gradient checkpointing, all 24 ViT blocks store activations:
+    # ~1.9 GB/block at batch=2 → 22 GB activations + 18 GB optimizer = 40 GB peak.
+    # batch=4 → 44+18=62 GB which tips over 95 GB during validation overlap.
+    # With 12 frames and full backbone: ~1B params, ~12 GB optimizer, ~6 GB activations
+    # at batch=4 → ~20 GB total, very comfortable on 96 GB.
     batch_size: int = 4
-    accumulate_grad_batches: int = 4   # effective batch = batch_size * accumulate_grad_batches
+    accumulate_grad_batches: int = 4   # effective batch = 16
     lr: float = 1e-4
     epochs: int = 50
     weight_decay: float = 0.05
