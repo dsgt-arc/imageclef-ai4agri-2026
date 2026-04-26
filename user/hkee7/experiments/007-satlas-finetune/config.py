@@ -46,7 +46,7 @@ class Config:
     precision: str = "bf16-mixed"
 
     # ---- DataLoader ---------------------------------------------------------
-    num_workers: int = 4
+    num_workers: int = 6
     pin_memory: bool = False
     augment: bool = True
 
