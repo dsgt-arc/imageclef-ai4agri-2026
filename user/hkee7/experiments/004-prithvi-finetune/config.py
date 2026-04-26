@@ -33,11 +33,11 @@ class Config:
     # Without working gradient checkpointing, all 24 ViT blocks store activations:
     # ~1.9 GB/block at batch=2 → 22 GB activations + 18 GB optimizer = 40 GB peak.
     # batch=4 → 44+18=62 GB which tips over 95 GB during validation overlap.
-    # With 4 seasonal frames: ~350M params total, very comfortable on any GPU.
-    batch_size: int = 8
-    accumulate_grad_batches: int = 2   # effective batch = 16
+    # 4 seasonal frames → 401M params, ~10 GB peak on 96 GB GPU at batch=32.
+    batch_size: int = 32
+    accumulate_grad_batches: int = 1   # effective batch = 32
     lr: float = 1e-4
-    epochs: int = 50
+    epochs: int = 100
     weight_decay: float = 0.05
     grad_clip: float = 1.0
     use_amp: bool = True

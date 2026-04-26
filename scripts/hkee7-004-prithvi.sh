@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=004-prithvi
 #SBATCH --account=paceship-clef2026_img_ai4agri
-#SBATCH --gres=gpu:1
+#SBATCH --partition=gpu-rtxpro-blackwell
+#SBATCH --gres=gpu:rtx_pro_6000_blackwell:1
 #SBATCH --constraint=RTX6000
-#SBATCH --cpus-per-task=6
-#SBATCH --mem=256G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=128G
 #SBATCH --time=08:00:00
 #SBATCH --qos=embers
 #SBATCH --output=artifacts/slurm-%j.out
