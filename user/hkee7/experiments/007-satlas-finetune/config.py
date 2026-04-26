@@ -13,9 +13,9 @@ class Config:
     save_dir: str = "artifacts"
 
     # ---- Model --------------------------------------------------------------
-    # timm model name — window8 variant generalises better to 128×128 input
-    # (window_size=8 patches → 32×32 pixel windows at stride 4, no padding issues)
-    encoder: str = "swinv2_base_window8_256.ms_in22k_ft_in1k"
+    # timm model name — ms_in22k_ft_in1k = pretrained on ImageNet-22k then fine-tuned
+    # on ImageNet-1K, giving the richest feature initialisation available.
+    encoder: str = "swinv2_base_window12to16_192to256.ms_in22k_ft_in1k"
 
     # Path to a SatLas pretrained checkpoint (.pth) to use instead of
     # ImageNet-22k weights.  Set to "" to use the default timm weights.
