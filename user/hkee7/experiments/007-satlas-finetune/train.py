@@ -13,6 +13,10 @@ import os
 
 import torch
 from config import Config
+
+# Enables Tensor Core TF32 for matrix multiplications — free ~20% throughput
+# on Ampere/Hopper/Blackwell with negligible precision impact.
+torch.set_float32_matmul_precision("high")
 from dataset import ChunkAwareSampler, SatlasDataset
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint

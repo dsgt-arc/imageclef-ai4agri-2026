@@ -190,7 +190,8 @@ class SatlasSegmentation(pl.LightningModule):
         Returns:
             logits: (B, K-1, H, W) at original input resolution
         """
-        features = self.backbone(x)         # list of 4 tensors, fine→coarse
+        features = self.backbone(x)         # list of 4 tensors in (B, H, W, C) — Swin channels-last
+        features = [f.permute(0, 3, 1, 2).contiguous() for f in features]  # → (B, C, H, W)
         fused = self.fpn(features)          # (B, fpn_ch, H/4, W/4)
         logits = self.head(fused)           # (B, K-1, H/4, W/4)
         return F.interpolate(logits, size=x.shape[-2:], mode="bilinear", align_corners=False)

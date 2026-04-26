@@ -34,7 +34,7 @@ cd user/hkee7/experiments/007-satlas-finetune
 # Run training
 # ---------------------------------------------------------------------------
 echo "Training Swin-V2-B + FPN (SatLas/ImageNet-22k)..."
-uv run python train.py \
+srun uv run python train.py \
     --save-dir /storage/project/ps-clef2026_img_ai4agri-0/hkee7/imageclef-ai4agri-2026/runs/satlas-v1
 
 echo "Training completed."
