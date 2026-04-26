@@ -151,10 +151,10 @@ class PrithviSegmentation(pl.LightningModule):
             num_classes=cfg.num_classes - 1,  # K-1 ordinal thresholds
         )
 
-        # Freeze backbone so AdamW only tracks neck + decoder params (~tens of M).
-        # Without freezing, optimizer fp32 master-weights + momentum + variance for
-        # 923 M params alone exceed 13 GB, leaving no room for activations on a 22 GiB GPU.
         if cfg.freeze_backbone:
+            # Frozen backbone: AdamW only tracks neck + decoder params.
+            # Required for GPUs < 40 GB where optimizer states for ~1B params
+            # alone would exceed available memory.
             for param in self.model.encoder.parameters():
                 param.requires_grad = False
             frozen = sum(p.numel() for p in self.model.encoder.parameters())
@@ -164,6 +164,15 @@ class PrithviSegmentation(pl.LightningModule):
                 f"trainable (neck+decoder): {trainable/1e6:.1f} M params",
                 flush=True,
             )
+        else:
+            # Full fine-tuning: enable gradient checkpointing so the backward pass
+            # recomputes activations layer-by-layer instead of storing all 24 layers
+            # simultaneously (~18 GB for batch=8, 34 frames without checkpointing).
+            if hasattr(self.model.encoder, "set_grad_checkpointing"):
+                self.model.encoder.set_grad_checkpointing(True)
+                print("[init] full fine-tuning with gradient checkpointing enabled", flush=True)
+            total = sum(p.numel() for p in self.model.parameters())
+            print(f"[init] full fine-tuning: {total/1e6:.1f} M trainable params", flush=True)
 
         # Inspect the REAL (pretrained) backbone after build to confirm its config
         print("[debug-init] inspecting REAL pretrained encoder:", flush=True)

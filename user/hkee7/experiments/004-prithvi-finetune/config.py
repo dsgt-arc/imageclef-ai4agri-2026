@@ -19,27 +19,26 @@ class Config:
     num_frames_data: int = 34
 
     # Timesteps fed to the backbone (uniformly subsampled from num_frames_data).
-    # Attention memory scales as O(T²): 34 frames → 2177 tokens → ~14 GB just for
-    # backbone intermediates across 24 layers.  12 frames → 769 tokens → ~2 GB.
-    num_frames: int = 12
+    # On RTX 6000 Blackwell (96 GB) all 34 frames fit with full fine-tuning.
+    # On smaller GPUs (22 GB) use num_frames=12 with freeze_backbone=True.
+    num_frames: int = 34
 
     # Spatial tile size in pixels (must match precomputed tensor patches)
     img_size: int = 128
 
     # Optimization
-    batch_size: int = 4
+    # With full backbone fine-tuning on 96 GB: batch=8, accum=2 → effective=16
+    batch_size: int = 8
     accumulate_grad_batches: int = 2   # effective batch = batch_size * accumulate_grad_batches
     lr: float = 1e-4
-    epochs: int = 200
+    epochs: int = 50
     weight_decay: float = 0.05
     grad_clip: float = 1.0
     use_amp: bool = True
 
-    # Freeze the ViT backbone and only train the neck + decoder.
-    # AdamW optimizer states for 923 M params consume ~13 GB in fp32 — more than
-    # the 22 GiB GPU can accommodate alongside activations.  With the backbone
-    # frozen, trainable params drop to ~tens of millions and the model fits.
-    freeze_backbone: bool = True
+    # Full backbone fine-tuning — requires ≥40 GB GPU (96 GB RTX 6000 Blackwell).
+    # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
+    freeze_backbone: bool = False
 
     # Dataloader — num_workers=0 avoids IPC socket crashes on PACE
     num_workers: int = 4
