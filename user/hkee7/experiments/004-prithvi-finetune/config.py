@@ -34,9 +34,10 @@ class Config:
     epochs: int = 50
     weight_decay: float = 0.05
     grad_clip: float = 1.0
-    use_amp: bool = True
-    # Blackwell GPUs require bf16-mixed; older GPUs can use 16-mixed or 32
-    precision: str = "bf16-mixed"
+    # AMP disabled: cuDNN BatchNorm with bf16/fp16 is broken on Blackwell with
+    # the current cuDNN version. fp32 fits easily on 96 GB and avoids the issue.
+    use_amp: bool = False
+    precision: str = "bf16-mixed"  # only used when use_amp=True
 
     # Full backbone fine-tuning — requires ≥40 GB GPU (96 GB RTX 6000 Blackwell).
     # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
