@@ -27,9 +27,11 @@ class Config:
     img_size: int = 128
 
     # Optimization
-    # With full backbone fine-tuning on 96 GB: batch=8, accum=2 → effective=16
-    batch_size: int = 8
-    accumulate_grad_batches: int = 2   # effective batch = batch_size * accumulate_grad_batches
+    # set_grad_checkpointing doesn't fire in PrithviViT's custom forward, so all
+    # 24 transformer blocks store their activations: ~3.7 GB/block × 24 = 89 GB
+    # at batch=8.  batch=4 needs ~57 GB (fits in 95 GB); effective batch kept at 16.
+    batch_size: int = 4
+    accumulate_grad_batches: int = 4   # effective batch = batch_size * accumulate_grad_batches
     lr: float = 1e-4
     epochs: int = 50
     weight_decay: float = 0.05
@@ -41,10 +43,7 @@ class Config:
     # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
     freeze_backbone: bool = False
 
-    # num_workers=0: each worker loads a full chunk (~GB) into RAM; with 4 workers
-    # the combined footprint can silently exceed the cgroup mem limit → SIGKILL.
-    # Single-process loading is slower but safe on networked PACE storage.
-    num_workers: int = 0
+    num_workers: int = 4
     pin_memory: bool = False
     augment: bool = True
 
