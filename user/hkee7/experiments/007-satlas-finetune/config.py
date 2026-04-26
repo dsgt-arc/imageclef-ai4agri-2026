@@ -37,8 +37,8 @@ class Config:
     # bf16-mixed on 96 GB Blackwell: batch=64 is well within budget.
     batch_size: int = 64
     accumulate_grad_batches: int = 1    # effective batch = 64
-    lr: float = 3e-4                    # head learning rate
-    backbone_lr_scale: float = 0.1      # backbone uses lr × this factor
+    lr: float = 5e-5                    # head learning rate — slower to avoid early plateau
+    backbone_lr_scale: float = 0.01     # backbone at 5e-7, very conservative
     epochs: int = 100
     weight_decay: float = 0.05
     grad_clip: float = 1.0

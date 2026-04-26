@@ -82,6 +82,13 @@ class SatlasDataset(Dataset):
         data = data.clamp(0.0, 1.0)
 
         features = _temporal_stats(data)  # (40, H, W)
+
+        # Per-patch z-score normalisation: remove absolute reflectance level so the
+        # model sees relative spectral patterns.  Test patches come from different
+        # regions with different absolute levels; this makes features region-invariant.
+        mean = features.mean(dim=(-2, -1), keepdim=True)   # (40, 1, 1)
+        std  = features.std(dim=(-2, -1), keepdim=True).clamp(min=1e-6)
+        features = (features - mean) / std
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx] if len(self._cache_ids) > 0 else ""
 
