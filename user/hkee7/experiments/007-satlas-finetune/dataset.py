@@ -5,8 +5,9 @@ All 34 timesteps × 10 bands are stacked into a single (340, H, W) tensor,
 matching the organiser's stacked-channel approach — but fed to a pretrained
 Swin-V2-B backbone instead of a from-scratch UNet.
 
-Normalisation: per-patch z-score across all 340 channels, making the model
-invariant to absolute reflectance levels that vary across geographic regions.
+Normalisation: simple /10000 clamp to [0, 1], preserving absolute reflectance
+levels which carry real signal for viticulture suitability (e.g. high summer
+NIR = healthy vegetation = higher suitability). Matches the organiser baseline.
 """
 
 import os
@@ -82,13 +83,7 @@ class SatlasDataset(Dataset):
 
         # Stack all timesteps into channels: (T, C, H, W) → (T*C, H, W)
         T, C, H, W = data.shape
-        features = data.reshape(T * C, H, W)   # (340, H, W)
-
-        # Per-patch z-score: subtract each channel's spatial mean, divide by std.
-        # Removes absolute reflectance bias so the model learns relative patterns.
-        mean = features.mean(dim=(-2, -1), keepdim=True)          # (340, 1, 1)
-        std  = features.std(dim=(-2, -1), keepdim=True).clamp(min=1e-6)
-        features = (features - mean) / std
+        features = data.reshape(T * C, H, W)   # (340, H, W) in [0, 1]
 
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx] if len(self._cache_ids) > 0 else ""
