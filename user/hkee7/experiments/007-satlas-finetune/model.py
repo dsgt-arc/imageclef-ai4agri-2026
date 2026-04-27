@@ -217,14 +217,26 @@ class SatlasSegmentation(pl.LightningModule):
         self.log("val_pm1", acc, on_epoch=True, prog_bar=True, sync_dist=True)
 
     def configure_optimizers(self):
-        backbone_params = list(self.backbone.parameters())
         head_params = list(self.fpn.parameters()) + list(self.head.parameters())
 
-        optimizer = torch.optim.AdamW(
-            [
+        if self.cfg.backbone_lr_scale == 0.0:
+            # Frozen backbone: only optimise FPN + head (~5M params).
+            # Forces the model to use general ImageNet features rather than
+            # overfitting backbone weights to the training patch distribution.
+            for p in self.backbone.parameters():
+                p.requires_grad_(False)
+            param_groups = [{"params": head_params, "lr": self.cfg.lr}]
+            frozen = sum(p.numel() for p in self.backbone.parameters())
+            print(f"[init] backbone frozen ({frozen/1e6:.1f}M params); training FPN+head only", flush=True)
+        else:
+            backbone_params = [p for p in self.backbone.parameters() if p.requires_grad]
+            param_groups = [
                 {"params": head_params, "lr": self.cfg.lr},
                 {"params": backbone_params, "lr": self.cfg.lr * self.cfg.backbone_lr_scale},
-            ],
+            ]
+
+        optimizer = torch.optim.AdamW(
+            param_groups,
             weight_decay=self.cfg.weight_decay,
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(

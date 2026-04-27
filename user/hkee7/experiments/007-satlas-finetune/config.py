@@ -22,10 +22,10 @@ class Config:
     # Download from: https://huggingface.co/allenai/satlas-pretrain
     satlas_checkpoint: str = ""
 
-    # 34 timesteps × 10 S2 bands stacked as channels = 340.
-    # Matches the organiser's stacked approach; pretrained Swin backbone
-    # replaces the from-scratch UNet encoder.
-    in_channels: int = 340
+    # 34 timesteps × (10 S2 bands + 3 spectral indices) = 34 × 13 = 442 channels.
+    # NDVI, EVI, NDWI appended per timestep — ratio-based indices are physically
+    # meaningful for vegetation and invariant to absolute reflectance scale.
+    in_channels: int = 442
     fpn_channels: int = 256
 
     # ---- Task ---------------------------------------------------------------
@@ -37,8 +37,8 @@ class Config:
     # bf16-mixed on 96 GB Blackwell: batch=64 is well within budget.
     batch_size: int = 64
     accumulate_grad_batches: int = 1    # effective batch = 64
-    lr: float = 5e-5                    # head learning rate — slower to avoid early plateau
-    backbone_lr_scale: float = 0.01     # backbone at 5e-7, very conservative
+    lr: float = 1e-3                    # head-only LR — backbone is frozen
+    backbone_lr_scale: float = 0.0      # 0.0 = freeze backbone entirely
     epochs: int = 100
     weight_decay: float = 0.05
     grad_clip: float = 1.0

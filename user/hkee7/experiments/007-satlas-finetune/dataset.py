@@ -81,9 +81,12 @@ class SatlasDataset(Dataset):
         data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE
         data = data.clamp(0.0, 1.0)
 
+        # Append per-timestep spectral indices: NDVI, EVI, NDWI → (T, 13, H, W)
+        data = torch.cat([data, _spectral_indices(data)], dim=1)
+
         # Stack all timesteps into channels: (T, C, H, W) → (T*C, H, W)
         T, C, H, W = data.shape
-        features = data.reshape(T * C, H, W)   # (340, H, W) in [0, 1]
+        features = data.reshape(T * C, H, W)   # (442, H, W) in [0, 1]
 
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx] if len(self._cache_ids) > 0 else ""
@@ -94,6 +97,33 @@ class SatlasDataset(Dataset):
         if self.mode == "test":
             return features, label, patch_id
         return features, label
+
+
+def _spectral_indices(data: torch.Tensor) -> torch.Tensor:
+    """Compute NDVI, EVI, NDWI for each of the T timesteps.
+
+    Band layout (10-band Sentinel-2):
+      0=B2 (Blue), 1=B3 (Green), 2=B4 (Red), 3=B5, 4=B6, 5=B7,
+      6=B8, 7=B8A (Narrow NIR), 8=B11 (SWIR1), 9=B12 (SWIR2)
+
+    Args:
+        data: (T, 10, H, W) float32 in [0, 1]
+
+    Returns:
+        (T, 3, H, W) — [NDVI, EVI, NDWI] clipped to [-1, 1]
+    """
+    eps = 1e-6
+    blue = data[:, 0]   # B2
+    green = data[:, 1]  # B3
+    red = data[:, 2]    # B4
+    nir = data[:, 7]    # B8A
+
+    ndvi = (nir - red) / (nir + red + eps)
+    evi  = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1 + eps)
+    ndwi = (green - nir) / (green + nir + eps)
+
+    indices = torch.stack([ndvi, evi, ndwi], dim=1).clamp(-1, 1)  # (T, 3, H, W)
+    return indices
 
 
 class ChunkAwareSampler(Sampler):
