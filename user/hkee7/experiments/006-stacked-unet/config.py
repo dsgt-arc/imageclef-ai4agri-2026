@@ -22,22 +22,24 @@ class Config:
     # ---- Model --------------------------------------------------------------
     mode: str = "ordinal"         # "regression", "classification", or "ordinal"
     num_classes: int = 5          # classes 1–5 (label 0 = unlabelled/ignore)
-    base_channels: int = 64       # first encoder level width
-    depth: int = 4                # number of UNet levels
+    base_channels: int = 128      # 2× organiser baseline — more capacity
+    depth: int = 4                # number of UNet levels (128→256→512→1024)
 
     # ---- Training -----------------------------------------------------------
-    epochs: int = 300
+    # Cosine annealing over 500 epochs with a higher LR — converges well and
+    # generalises better than flat 1e-5 for longer runs.
+    epochs: int = 500
     batch_size: int = 32
-    lr: float = 1e-5              # matches organiser supplement
+    lr: float = 1e-4
     weight_decay: float = 1e-4
-    grad_clip: float = 1.0        # max gradient norm; set 0 to disable
-    scheduler: str = "none"       # "cosine", "step", or "none" (organiser used none)
-    cosine_t0: int = 300
+    grad_clip: float = 1.0
+    scheduler: str = "cosine"
+    cosine_t0: int = 500          # single cosine cycle over full training
     cosine_t_mult: int = 1
     step_gamma: float = 0.5
     step_size: int = 50
     num_workers: int = 4
-    pin_memory: bool = False
+    pin_memory: bool = True
 
     # ---- Loss ---------------------------------------------------------------
     loss_fn: str = "smooth_l1"    # for regression mode only
@@ -48,7 +50,7 @@ class Config:
     stats_path: str = "stats.pt"  # output of compute_stats.py (per-band mean/std)
 
     # ---- Augmentation -------------------------------------------------------
-    augment: bool = False
+    augment: bool = True          # flips + 90° rotations
 
     # ---- Misc ---------------------------------------------------------------
     seed: int = 42

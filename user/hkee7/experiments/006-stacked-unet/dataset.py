@@ -81,13 +81,22 @@ class UTAEDataset(Dataset):
             self._cache_label = payload["label"]
             self._cache_ids = payload["patch_ids"]
 
-        data = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE  # (T, C, H, W)
+        raw = self._cache_data[patch_idx].float() / REFLECTANCE_SCALE  # (T, C, H, W)
+        raw = raw.clamp(0.0, 1.0)
+
+        # Compute spectral indices from raw [0,1] reflectance before z-scoring.
+        # Ratios are physically meaningful and more invariant to absolute reflectance
+        # shifts between train and test geographic regions.
+        indices = _spectral_indices(raw)   # (T, 4, H, W)
 
         if self.band_mean is not None:
-            # z-score normalise: broadcast (1, C, 1, 1) across T, H, W
-            data = (data - self.band_mean) / self.band_std
+            data = (raw - self.band_mean) / self.band_std
         else:
-            data = data.clamp(0.0, 1.0)
+            data = raw
+
+        # Concatenate original bands + spectral indices: (T, C+4, H, W)
+        data = torch.cat([data, indices], dim=1)
+
         label = self._cache_label[patch_idx]
         patch_id = self._cache_ids[patch_idx]
 
@@ -123,6 +132,30 @@ class ChunkAwareSampler(Sampler):
 
     def __len__(self):
         return sum(len(c) for c in self.chunks)
+
+
+def _spectral_indices(data: torch.Tensor) -> torch.Tensor:
+    """Per-timestep spectral indices from 10-band Sentinel-2 reflectance in [0,1].
+
+    Band layout: 0=B2(Blue) 1=B3(Green) 2=B4(Red) 3=B5(RE1) 4=B6(RE2) 5=B7(RE3)
+                 6=B8(NIR-broad) 7=B8A(NIR-narrow) 8=B11(SWIR1) 9=B12(SWIR2)
+
+    Returns (T, 4, H, W) clipped to [-1, 1]:
+        NDVI  — vegetation health (NIR vs Red)
+        EVI   — enhanced vegetation (atmospheric-corrected)
+        NDWI  — water content (Green vs NIR)
+        NDRE  — red-edge NDVI (NIR vs RedEdge1) — earlier stress detection
+    """
+    eps = 1e-6
+    blue, green, red = data[:, 0], data[:, 1], data[:, 2]
+    re1, nir = data[:, 3], data[:, 7]
+
+    ndvi = (nir - red)   / (nir + red   + eps)
+    evi  = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1 + eps)
+    ndwi = (green - nir) / (green + nir + eps)
+    ndre = (nir - re1)   / (nir + re1   + eps)
+
+    return torch.stack([ndvi, evi, ndwi, ndre], dim=1).clamp(-1.0, 1.0)
 
 
 def _random_spatial_augment(
