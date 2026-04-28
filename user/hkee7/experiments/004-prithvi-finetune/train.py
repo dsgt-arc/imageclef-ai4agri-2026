@@ -25,9 +25,9 @@ def train(cfg: Config, resume: str | None = None):
     os.makedirs(cfg.save_dir, exist_ok=True)
 
     print("Loading datasets …")
-    train_ds = PrithviDataset("train", cfg.data_path, cfg.metadata_path, augment=cfg.augment, seasonal_composite=cfg.seasonal_composite)
-    val_ds   = PrithviDataset("val",   cfg.data_path, cfg.metadata_path, augment=False, seasonal_composite=cfg.seasonal_composite)
-    print(f"  train: {len(train_ds)} patches, val: {len(val_ds)} patches")
+    train_ds = PrithviDataset("train", cfg.data_path, cfg.metadata_path, augment=cfg.augment)
+    val_ds   = PrithviDataset("val",   cfg.data_path, cfg.metadata_path, augment=False)
+    print(f"  train: {len(train_ds)} frame-patch samples, val: {len(val_ds)} frame-patch samples")
 
     train_loader = DataLoader(
         train_ds,
@@ -44,7 +44,7 @@ def train(cfg: Config, resume: str | None = None):
         pin_memory=cfg.pin_memory,
     )
 
-    print(f"Building PrithviSegmentation (backbone={cfg.backbone}, T={cfg.num_frames}) …")
+    print(f"Building PrithviSegmentation (backbone={cfg.backbone}, T=1, single-frame strategy) …")
     model = PrithviSegmentation(cfg)
 
     callbacks = [
@@ -90,7 +90,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--lr", type=float)
-    parser.add_argument("--num-frames", type=int)
     parser.add_argument("--backbone", type=str)
     parser.add_argument("--save-dir", type=str)
     parser.add_argument("--data-path", type=str)

@@ -16,17 +16,17 @@ class PrithviDataset(Dataset):
     Filters the 10 S2 bands to the 6 bands required by Prithvi-EO-1.0/2.0:
     Blue, Green, Red, Narrow NIR, SWIR1, SWIR2.
 
-    When seasonal_composite=True (recommended), the 34 raw timesteps are
-    averaged within each of 4 meteorological seasons (Winter/Spring/Summer/Autumn),
-    returning T=4 composites instead of T=34 raw frames.  This collapses the
-    redundant multi-year temporal dimension into a compact seasonal signature,
-    matching the static nature of the viticulture suitability label.
+    Each item is a **single timestep** of a single spatial patch, so the model
+    always receives T=1 frames.  This lets the backbone run exactly as pretrained
+    (no temporal-token interpolation) and multiplies the effective training set
+    size by num_frames (34×).  Predictions for the same patch are averaged at
+    inference time.
 
     Returns
     -------
-    data       : Tensor[float32] — (T, C=6, H, W)   T=4 (seasonal) or T=34 (raw)
-    label      : Tensor[long]    — (H, W)
-    doys       : Tensor[float32] — (T,)
+    data   : Tensor[float32] — (1, C=6, H, W)
+    label  : Tensor[long]    — (H, W)
+    doy    : Tensor[float32] — (1,)  day-of-year for this specific frame
     """
 
     def __init__(
@@ -35,32 +35,31 @@ class PrithviDataset(Dataset):
         chunk_dir: str = "data/precomputed_tensors",
         metadata_path: str = "data/agripotential/metadata.csv",
         augment: bool = False,
-        seasonal_composite: bool = False,
     ):
         self.chunk_dir = os.path.join(chunk_dir, mode)
         chunk_files = sorted(f for f in os.listdir(self.chunk_dir) if f.endswith(".pt"))
 
-        self.index: list[tuple[str, int]] = []
+        # index: (chunk_filename, patch_idx_in_chunk, frame_idx)
+        self.index: list[tuple[str, int, int]] = []
         for f in chunk_files:
             path = os.path.join(self.chunk_dir, f)
-            n = torch.load(path, weights_only=True, mmap=True)["data"].shape[0]
-            self.index.extend((f, i) for i in range(n))
+            chunk = torch.load(path, weights_only=True, mmap=True)
+            n_patches, n_frames = chunk["data"].shape[:2]
+            for p in range(n_patches):
+                for t in range(n_frames):
+                    self.index.append((f, p, t))
 
         self.augment = augment
-        self.seasonal_composite = seasonal_composite
+        self.mode = mode
 
         meta = pl.read_csv(metadata_path)
-        if seasonal_composite:
-            self.seasonal_indices, seasonal_doys = _parse_seasonal_indices(meta)
-            self.doys = torch.from_numpy(seasonal_doys)
-        else:
-            self.doys = torch.from_numpy(_parse_doys(meta)).float()
+        # Per-frame DOY array, shape (num_frames,)
+        self._all_doys = torch.from_numpy(_parse_doys(meta)).float()
 
         self._cache_file: str | None = None
         self._cache_data = None
         self._cache_label = None
         self._cache_ids = None
-        self.mode = mode
 
         # Indices in the 10-band dataset corresponding to:
         # B2 (Blue), B3 (Green), B4 (Red), B8A (Narrow NIR), B11 (SWIR1), B12 (SWIR2)
@@ -71,48 +70,52 @@ class PrithviDataset(Dataset):
         return len(self.index)
 
     def __getitem__(self, idx):
-        f, patch_idx = self.index[idx]
+        f, patch_idx, frame_idx = self.index[idx]
+
         if f != self._cache_file:
             payload = torch.load(os.path.join(self.chunk_dir, f), weights_only=True)
             self._cache_file = f
             self._cache_data = payload["data"]
-            self._cache_label = payload.get("label", torch.zeros(
-                payload["data"].shape[0], payload["data"].shape[-2], payload["data"].shape[-1], dtype=torch.long
-            ))
+            n = payload["data"].shape[0]
+            h, w = payload["data"].shape[-2], payload["data"].shape[-1]
+            self._cache_label = payload.get(
+                "label", torch.zeros(n, h, w, dtype=torch.long)
+            )
             self._cache_ids = payload.get("patch_ids", [])
 
-        # Load all timesteps for this patch, select 6 HLS bands
-        data = self._cache_data[patch_idx, :, self.band_indices, :, :].float() / REFLECTANCE_SCALE
-        data = data.clamp(0.0, 1.0)  # (34, 6, H, W)
-
-        if self.seasonal_composite:
-            # Average within each season → (4, 6, H, W): [Winter, Spring, Summer, Autumn]
-            data = torch.stack([
-                data[torch.from_numpy(idx)].mean(dim=0)
-                for idx in self.seasonal_indices
-            ])
-        label = self._cache_label[patch_idx]
-        
-        # We also support test mode which needs patch_ids
-        patch_id = self._cache_ids[patch_idx] if len(self._cache_ids) > 0 else ""
+        # Single frame: (1, C=6, H, W)
+        data = (
+            self._cache_data[patch_idx, frame_idx, self.band_indices, :, :]
+            .float()
+            .div_(REFLECTANCE_SCALE)
+            .clamp_(0.0, 1.0)
+            .unsqueeze(0)  # add T=1 dim
+        )
+        label = self._cache_label[patch_idx]  # (H, W)
+        doy = self._all_doys[frame_idx : frame_idx + 1]  # (1,)
 
         if self.augment:
             data, label = _random_spatial_augment(data, label)
 
         if self.mode == "test":
-            return data, label, self.doys, patch_id
-        return data, label, self.doys
+            patch_id = self._cache_ids[patch_idx] if len(self._cache_ids) > 0 else ""
+            return data, label, doy, patch_id
+        return data, label, doy
 
 
 class ChunkAwareSampler(Sampler):
-    """Yields indices grouped by chunk to keep the per-worker cache warm."""
+    """Yields indices grouped by chunk to keep the per-worker cache warm.
+
+    Groups items by chunk file so consecutive samples share the same mmap'd
+    tensor, minimising redundant disk reads across workers.
+    """
 
     def __init__(self, dataset: PrithviDataset, shuffle: bool = True, seed: int = 42):
         self.shuffle = shuffle
         self.rng = torch.Generator().manual_seed(seed)
 
         chunks: dict[str, list[int]] = {}
-        for i, (f, _) in enumerate(dataset.index):
+        for i, (f, _p, _t) in enumerate(dataset.index):
             chunks.setdefault(f, []).append(i)
         self.chunks = list(chunks.values())
 
@@ -147,46 +150,6 @@ def _random_spatial_augment(
         data = torch.rot90(data, k, dims=(-2, -1))
         label = torch.rot90(label, k, dims=(-2, -1))
     return data, label
-
-
-def _month_to_season(month: int) -> int:
-    """Meteorological season index: 0=Winter, 1=Spring, 2=Summer, 3=Autumn."""
-    if month in (12, 1, 2):
-        return 0
-    if month in (3, 4, 5):
-        return 1
-    if month in (6, 7, 8):
-        return 2
-    return 3  # 9, 10, 11
-
-
-def _parse_seasonal_indices(
-    meta: pl.DataFrame,
-) -> tuple[list[np.ndarray], np.ndarray]:
-    """
-    Group the 34 raw timesteps into 4 meteorological seasons.
-
-    Returns
-    -------
-    seasonal_indices : list of 4 int arrays — timestep indices per season
-                       order: [Winter, Spring, Summer, Autumn]
-    seasonal_doys    : (4,) float32 — mean day-of-year per season composite
-    """
-    months = meta.get_column("month").cast(pl.Int32).to_numpy()
-    doys = _parse_doys(meta)
-    season_ids = np.array([_month_to_season(int(m)) for m in months])
-
-    seasonal_indices = [np.where(season_ids == s)[0] for s in range(4)]
-    # Representative DOY: mean of frames in each season (fallback to mid-season)
-    fallback_doys = np.array([15.0, 105.0, 196.0, 288.0], dtype=np.float32)
-    seasonal_doys = np.array(
-        [
-            float(doys[idx].mean()) if len(idx) > 0 else fallback_doys[s]
-            for s, idx in enumerate(seasonal_indices)
-        ],
-        dtype=np.float32,
-    )
-    return seasonal_indices, seasonal_doys
 
 
 def _parse_doys(meta: pl.DataFrame) -> np.ndarray:

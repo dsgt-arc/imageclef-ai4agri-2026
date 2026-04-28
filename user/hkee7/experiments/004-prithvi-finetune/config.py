@@ -15,24 +15,20 @@ class Config:
     # Prithvi backbone name in terratorch registry
     backbone: str = "prithvi_eo_v2_300"
 
-    # Total timesteps in the dataset tensors (all 34 frames used directly).
-    # TemporalMeanPool neck collapses T after spatial encoding, so
-    # LearnedInterpolateToPyramidal's O(T²) param explosion is avoided.
-    num_frames_data: int = 34
-    seasonal_composite: bool = False
-    num_frames: int = 34
+    # Single-frame strategy: backbone always receives T=1.
+    # Each of the 34 raw frames is treated as an independent training sample,
+    # giving 34× more data points and exact alignment with pretrained weights.
+    num_frames: int = 1
 
     # Spatial tile size in pixels (must match precomputed tensor patches)
     img_size: int = 128
 
     # Optimization
-    # 34 frames: 2177 tokens/sample; backbone ~300M params; TemporalMeanPool has no
-    # learned params; InterpolateToPyramidal is bilinear (no params).
-    # With grad checkpointing + bf16 on 96 GB GPU:
-    #   model weights ~600 MB, optimizer (Adam) ~3.6 GB, activations ~1–2 GB/sample
-    # batch=16, accum=2 → effective batch=32; peak ~25–30 GB — well within 96 GB.
-    batch_size: int = 16
-    accumulate_grad_batches: int = 2   # effective batch = 32
+    # T=1 input → 64 tokens/sample (vs 2177 for T=34).
+    # With grad checkpointing + bf16 on 96 GB GPU, batch=32 is comfortably
+    # within memory; accumulate=1 is sufficient for stable gradients.
+    batch_size: int = 32
+    accumulate_grad_batches: int = 1   # effective batch = 32
     lr: float = 1e-4
     epochs: int = 100
     weight_decay: float = 0.05
@@ -40,8 +36,7 @@ class Config:
     use_amp: bool = True
     precision: str = "bf16-mixed"
 
-    # Full backbone fine-tuning — requires ≥40 GB GPU (96 GB RTX 6000 Blackwell).
-    # Set True and reduce num_frames=12 / batch_size=4 for smaller GPUs.
+    # Full backbone fine-tuning — set freeze_backbone=True for GPUs <40 GB.
     freeze_backbone: bool = False
 
     num_workers: int = 4
