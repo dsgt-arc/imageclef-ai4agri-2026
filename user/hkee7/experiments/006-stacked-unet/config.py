@@ -22,24 +22,22 @@ class Config:
     # ---- Model --------------------------------------------------------------
     mode: str = "ordinal"         # "regression", "classification", or "ordinal"
     num_classes: int = 5          # classes 1–5 (label 0 = unlabelled/ignore)
-    base_channels: int = 128      # 2× organiser baseline — more capacity
-    depth: int = 4                # number of UNet levels (128→256→512→1024)
+    base_channels: int = 64       # first encoder level width
+    depth: int = 4                # number of UNet levels
 
     # ---- Training -----------------------------------------------------------
-    # Cosine annealing over 500 epochs with a higher LR — converges well and
-    # generalises better than flat 1e-5 for longer runs.
-    epochs: int = 500
+    epochs: int = 300
     batch_size: int = 32
-    lr: float = 1e-4
+    lr: float = 1e-5              # matches organiser supplement
     weight_decay: float = 1e-4
-    grad_clip: float = 1.0
-    scheduler: str = "cosine"
-    cosine_t0: int = 500          # single cosine cycle over full training
+    grad_clip: float = 1.0        # max gradient norm; set 0 to disable
+    scheduler: str = "none"       # "cosine", "step", or "none" (organiser used none)
+    cosine_t0: int = 300
     cosine_t_mult: int = 1
     step_gamma: float = 0.5
     step_size: int = 50
     num_workers: int = 4
-    pin_memory: bool = True
+    pin_memory: bool = False
 
     # ---- Loss ---------------------------------------------------------------
     loss_fn: str = "smooth_l1"    # for regression mode only
@@ -47,10 +45,12 @@ class Config:
     ignore_index: int = 0         # unlabelled pixels
 
     # ---- Normalisation ------------------------------------------------------
-    stats_path: str = "stats.pt"  # output of compute_stats.py (per-band mean/std)
+    # Organiser normalises by /10000 only (paper section III-D).
+    # Set stats_path to "" or a non-existent path to use /10000 fallback.
+    stats_path: str = ""
 
     # ---- Augmentation -------------------------------------------------------
-    augment: bool = True          # flips + 90° rotations
+    augment: bool = False
 
     # ---- Misc ---------------------------------------------------------------
     seed: int = 42
