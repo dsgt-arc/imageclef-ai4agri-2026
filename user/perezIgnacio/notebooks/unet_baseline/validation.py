@@ -302,6 +302,85 @@ class FlatUNet(nn.Module):
 
         return self.out(d1) # [B, 4, H, W]
 
+def visualize_failures(model, val_loader, device, output_dir, n_samples=10):
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    os.makedirs(output_dir, exist_ok=True)
+    model.eval()
+    count = 0
+
+    # --- Colormaps ---
+    gt_cmap = plt.cm.get_cmap('RdYlGn', 5)  # for ground truth (shows -1)
+
+    pred_cmap = plt.cm.get_cmap('RdYlGn', 5).copy()
+    pred_cmap.set_bad(color='lightgray')  # masked areas → gray
+
+    error_cmap = plt.cm.get_cmap('RdYlGn_r').copy()
+    error_cmap.set_bad(color='lightgray')
+
+    binary_cmap = plt.cm.get_cmap('RdYlGn').copy()
+    binary_cmap.set_bad(color='lightgray')
+
+    with torch.no_grad():
+        for data, label, patch_ids in val_loader:
+            if count >= n_samples:
+                break
+
+            data, label = data.to(device), label.to(device)
+
+            logits = model(data)
+            preds  = ordinal_to_label(logits) - 1   # [B, H, W], 0–4
+            label_0indexed = label - 1              # [B, H, W], 0–4, -1 unlabeled
+
+            for i, pid in enumerate(patch_ids):
+                pred   = preds[i].cpu().numpy()
+                target = label_0indexed[i].cpu().numpy()
+
+                mask = target >= 0  # valid pixels
+
+                if mask.sum() == 0:
+                    continue
+
+                diff = np.abs(pred - target)
+
+                # --- Masked arrays (KEY FIX) ---
+                pred_masked   = np.ma.masked_where(~mask, pred)
+                diff_masked   = np.ma.masked_where(~mask, diff)
+
+                binary = (diff <= 1).astype(float)
+                binary_masked = np.ma.masked_where(~mask, binary)
+
+                # --- Plot ---
+                fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+
+                # Ground truth (keep -1 visible)
+                im0 = axes[0].imshow(target, vmin=-1, vmax=4, cmap=gt_cmap)
+                axes[0].set_title(f'Ground Truth\n{pid}')
+                plt.colorbar(im0, ax=axes[0])
+
+                # Prediction
+                axes[1].imshow(pred_masked, vmin=0, vmax=4, cmap=pred_cmap)
+                axes[1].set_title('Prediction')
+
+                # Error magnitude
+                axes[2].imshow(diff_masked, vmin=0, vmax=4, cmap=error_cmap)
+                axes[2].set_title('Error magnitude')
+
+                # Binary correctness
+                acc = binary[mask].mean()
+                axes[3].imshow(binary_masked, vmin=0, vmax=1, cmap=binary_cmap)
+                axes[3].set_title(f'±1 correct\nacc={acc:.3f}')
+
+                for ax in axes:
+                    ax.axis('off')
+
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, f'{pid}_failure.png'), dpi=100)
+                plt.close()
+
+                count += 1
 
 def plot_loss_curve(train_losses, val_losses, save_path):
     plt.figure(figsize=(10, 5))
@@ -338,10 +417,6 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', type=str, choices=['train', 'test'], required=True)
-    args = parser.parse_args()
-
     train_dataset = ChunkedDataset("train", cache_size=6)
     val_dataset   = ChunkedDataset("val",   cache_size=2)
 
@@ -363,182 +438,7 @@ if __name__ == "__main__":
         shuffle=False,
     )
 
-    if args.mode == 'train':
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            num_workers=4,
-            prefetch_factor=2,
-            persistent_workers=True,
-            shuffle=False,
-        )
+    model.load_state_dict(torch.load(f'{model_name}/best_model.pt', map_location=device))
+    model.eval()
 
-        optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr           = 1e-4,
-            weight_decay = 1e-2,
-        )
-
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max  = epochs,
-            eta_min= 1e-6,
-        )
-
-        train_losses = []
-        val_losses   = []
-
-        best_val_loss = float('inf')
-        patience      = 30
-        no_improve    = 0
-
-        for epoch in range(epochs):
-            train_dataset.shuffle()
-            model.train()
-
-            total_loss   = 0.0
-            total_pixels = 0
-            train_acc    = 0.0
-
-            for data, label, _ in train_loader:
-                data, label = data.cuda(), label.cuda()
-
-                ######
-                ## Data augmentation: random rotation and horizontal flip
-                k     = random.randint(0, 3)
-                hflip = random.random() > 0.5
-                
-                if k > 0:
-                    data  = torch.rot90(data,  k, [-2, -1])
-                    label = torch.rot90(label, k, [-2, -1])
-                if hflip:
-                    data  = torch.flip(data,  [-1])
-                    label = torch.flip(label, [-1])
-                ###### 
-                
-                optimizer.zero_grad()
-                logits = model(data)
-
-                loss_sum, n = loss_fn(logits, label)
-                if n == 0:
-                    continue
-
-                (loss_sum / n).backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-
-                total_loss += loss_sum.item()
-                acc, _      = accuracy_pm1(logits, label)
-                train_acc  += acc
-                total_pixels += n
-
-            train_loss = total_loss / total_pixels
-            train_acc  = train_acc  / total_pixels
-
-            val_loss, val_acc, val_acc_exact = evaluate(model, val_loader, device)
-
-            print(f"Epoch {epoch:3d} | train loss {train_loss:.4f} acc {train_acc:.4f} | "
-                f"val loss {val_loss:.4f} acc {val_acc:.4f} | exact acc {val_acc_exact:.4f}")
-
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
-
-            if epoch % 10 == 0:
-                plot_loss_curve(train_losses, val_losses, f'{model_name}/loss_curve.png')
-                torch.save(model.state_dict(), f'{model_name}/best_model-{epoch}.pt')
-
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                no_improve    = 0
-                torch.save(model.state_dict(), f'{model_name}/best_model.pt')
-            else:
-                no_improve += 1
-                if no_improve >= patience:
-                    print(f"Early stopping at epoch {epoch} — best val loss: {best_val_loss:.4f}")
-                    break
-
-        plot_loss_curve(train_losses, val_losses, f'{model_name}/loss_curve.png')
-        
-    elif args.mode == 'test':
-        model.load_state_dict(torch.load(f'{model_name}/best_model.pt', map_location=device))
-        model.eval()
-
-        print(evaluate(model, val_loader, device))
-
-        all_preds, all_labels = [], []
-
-        with torch.no_grad():
-            for data, label, _ in val_loader:
-                data  = data.to(device)
-                label = label.to(device)
-
-                logits = model(data)
-                preds= ordinal_to_label(logits)
-
-                mask = label != 0
-
-                labels = label[mask]
-                preds  = preds[mask]
-
-                # collect for confusion matrix
-                all_preds.append(preds.cpu())
-                all_labels.append(labels.cpu())
-
-        all_preds  = torch.cat(all_preds).numpy()
-        all_labels = torch.cat(all_labels).numpy()
-
-        cm = confusion_matrix(all_labels, all_preds, labels=[1,2,3,4,5])
-        
-        plt.figure(figsize=(6,5))
-        sns.heatmap(cm, annot=True, fmt='d', 
-                    xticklabels=[1,2,3,4,5], 
-                    yticklabels=[1,2,3,4,5],
-                    cmap='Blues')
-        plt.xlabel('Predicted')
-        plt.ylabel('True')
-        plt.title('Confusion Matrix')
-        plt.savefig(f'{model_name}/confusion_matrix.png')
-        plt.close()
-
-        test_dataset = ChunkedDataset("test", cache_size=2, add_indices=True)
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=32,
-            shuffle=False,
-            num_workers=0
-        )
-
-        output_dir = os.path.expandvars(f"{model_name}/submissions")
-        count = 0
-
-        total_counts = torch.zeros(5, dtype=torch.long)
-
-        with torch.no_grad():
-            for data, _, patch_ids in test_loader:
-                B = data.shape[0]
-                data = data.to(device)
-
-                logits = model(data)
-                preds = ordinal_to_label(logits) - 1  # [B, H, W], values 0-4
-
-                for c in range(5):
-                    total_counts[c] += (preds == c).sum().item()
-
-                for pred, pid in zip(preds.cpu().numpy(), patch_ids):
-                    img = Image.fromarray(pred.astype(np.uint8), mode='L')
-                    img.save(os.path.join(output_dir, f"{pid}.png"))
-                    count += 1
-
-        print(f"Total predictions: {total_counts.sum().item()}")
-        for c in range(5):
-            pct = total_counts[c].item() / total_counts.sum().item() * 100
-            print(f"  class {c}: {total_counts[c].item():>10,}  ({pct:.1f}%)")
-
-        # Zip all predictions
-        zip_path = f"{output_dir}.zip"
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for fname in sorted(os.listdir(output_dir)):
-                if fname.endswith('.png'):
-                    zf.write(os.path.join(output_dir, fname), fname)
-
-        print(f"Saved {count} predictions → {zip_path}")
+    visualize_failures(model, val_loader, device, f'{model_name}/failure_analysis')
