@@ -1,0 +1,47 @@
+\documentclass[]{style/ceurart}
+\sloppy
+
+\usepackage{listings}
+\lstset{breaklines=true}
+
+\begin{document}
+
+\copyrightyear{2025}
+\copyrightclause{Copyright for this paper by its authors.
+  Use permitted under Creative Commons License Attribution 4.0
+  International (CC BY 4.0).}
+
+\conference{CLEF 2026: Conference and Labs of the Evaluation Forum, September 21-24, 2026, Jena, Germany}
+
+\title{DS@GT Working Notes Template}
+
+\author[1]{George P. Burdell}[
+    orcid=XXXX-XXXX-XXXX-XXXX,
+    email=gburdell3@gatech.edu,
+]
+\cormark[1]
+
+\address[1]{Georgia Institute of Technology, North Ave NW, Atlanta, GA 30332}
+\cortext[1]{Corresponding author.}
+
+\begin{abstract}
+    This is the abstract of the paper. 
+    It should be a brief summary of the contents of the paper.
+\end{abstract}
+
+\begin{keywords}
+  LaTeX class \sep
+  paper template \sep
+  paper formatting \sep
+  CEUR-WS
+\end{keywords}
+
+\maketitle
+
+% We recommend splitting your main document into smaller parts that are easier to navigate.
+% The input command "imports" the contents of the file into the current location.
+% Prefixing the document with a number allows for natural string sorts.
+\input{sections/00_main}
+
+\bibliography{main}
+\end{document}
