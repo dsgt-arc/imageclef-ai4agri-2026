@@ -508,6 +508,18 @@ def evaluate(logits, labels):
 model.eval()
 model_unet.eval()
 
+val_loss, val_acc_pm1, val_acc_exact = evaluate_unet(model_unet, val_loader, device)
+
+print(f"UNet - val loss {val_loss:.4f} pm1 {val_acc_pm1:.4f} exact {val_acc_exact:.4f}")
+
+val_loss, val_acc_pm1, val_acc_exact = evaluate_prithvi(model, val_loader, device)
+
+print(f"Prithvi - val loss {val_loss:.4f} pm1 {val_acc_pm1:.4f} exact {val_acc_exact:.4f}")
+
+val_loss, val_acc_pm1, val_acc_exact = evaluate_ensemble(model, model_unet, val_loader, device)
+
+print(f"Ensemble - val loss {val_loss:.4f} pm1 {val_acc_pm1:.4f} exact {val_acc_exact:.4f}")
+
 # tried w = 0.35, 0.1, 0.4
 # other things tried: TTA, tuning thresholds
 generate_submission_ensemble(model_unet, model, test_loader, device, w=0.35) # best one is w=0.35
