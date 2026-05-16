@@ -240,54 +240,6 @@ class OrdinalSegmentationTask(SemanticSegmentationTask):
     def _compute_loss(self, logits, y):
         return ordinal_loss(logits, y)
         
-def generate_submission(model, test_loader, device):
-    output_dir = "submissions"
-    count = 0
-
-    total_counts = torch.zeros(5, dtype=torch.long)
-
-    with torch.no_grad():
-        for batch in test_loader:
-            data = batch["image"]
-            data_unet = batch["unet"]
-            temporal = batch.get("temporal_coords")
-            location = batch.get("location_coords")
-            patch_ids = batch.get("filename")
-
-            data = data.to(device)
-            temporal = temporal.to(device)
-            location = location.to(device)
-            
-            B = data.shape[0]
-
-            output = model(data, temporal_coords=temporal, location_coords=location)
-            features = output.output.unsqueeze(1) # [B,1,H,W] because by default model does mask = self._check_for_single_channel_and_squeeze(mask)
-            logits = model._to_ordinal_logits(features)
-
-            preds = ordinal_predict(logits)
-
-            for c in range(5):
-                total_counts[c] += (preds == c).sum().item()
-
-            for pred, pid in zip(preds.cpu().numpy(), patch_ids):
-                img = Image.fromarray(pred.astype(np.uint8), mode='L')
-                img.save(os.path.join(output_dir, f"{pid}.png"))
-                count += 1
-
-    print(f"Total predictions: {total_counts.sum().item()}")
-    for c in range(5):
-        pct = total_counts[c].item() / total_counts.sum().item() * 100
-        print(f"  class {c}: {total_counts[c].item():>10,}  ({pct:.1f}%)")
-
-    # Zip all predictions
-    zip_path = f"{output_dir}.zip"
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for fname in sorted(os.listdir(output_dir)):
-            if fname.endswith('.png'):
-                zf.write(os.path.join(output_dir, fname), fname)
-
-    print(f"Saved {count} predictions → {zip_path}")
-
 def generate_confusion_matrix(model, val_loader, device):
     all_preds, all_labels = [], []
 
@@ -336,6 +288,62 @@ def generate_confusion_matrix(model, val_loader, device):
     plt.savefig(f'confusion_matrix.png')
     plt.close()
   
+def evaluate_unet(model, loader, device):
+    total_loss = 0
+    total_correct = 0.0
+    total_correct_exact = 0.0
+    num_batches = 0
+
+    with torch.no_grad():
+        for batch in loader:
+            label = batch["mask"]
+            data_unet = batch["unet"]
+            
+            data_unet, label = data_unet.to(device), label.to(device)
+
+            # Unet
+            logits = model(data_unet)
+
+            total_loss += ordinal_loss(logits, label).item()
+            total_correct += accuracy_pm1(logits, label)
+            total_correct_exact += accuracy_exact(logits, label)
+            num_batches += 1
+
+    return total_loss / num_batches, total_correct / num_batches, total_correct_exact / num_batches
+
+def evaluate_ensemble(model_prithvi, model_unet, loader, device):
+    total_loss = 0
+    total_correct = 0.0
+    total_correct_exact = 0.0
+    num_batches = 0
+
+    with torch.no_grad():
+        for batch in loader:
+            data = batch["image"].to(device)
+            label = batch["mask"].to(device)
+            data_unet = batch["unet"].to(device)
+            temporal = batch.get("temporal_coords").to(device)
+            location = batch.get("location_coords").to(device)
+            patch_ids = batch.get("filename")
+
+            # Unet
+            logits_u = model_unet(data_unet)
+
+            # Prithvi
+            output = model_prithvi.model(data, temporal_coords=temporal, location_coords=location)
+            features = output.output.unsqueeze(1)
+            logits_p = model_prithvi._to_ordinal_logits(features)
+
+            w = 0.35
+            logits = w * logits_p + (1 - w) * logits_u
+            
+            total_loss += ordinal_loss(logits, label).item()
+            total_correct += accuracy_pm1(logits, label)
+            total_correct_exact += accuracy_exact(logits, label)
+            num_batches += 1
+
+    return total_loss / num_batches, total_correct / num_batches, total_correct_exact / num_batches
+
 def evaluate_prithvi(model, loader, device):
     model.eval()
     total_loss = 0
@@ -345,15 +353,12 @@ def evaluate_prithvi(model, loader, device):
 
     with torch.no_grad():
         for batch in loader:
-            data = batch["image"]
-            label = batch["mask"]
-            data_unet = batch["unet"]
-            temporal = batch.get("temporal_coords")
-            location = batch.get("location_coords")
+            data = batch["image"].to(device)
+            label = batch["mask"].to(device)
+            data_unet = batch["unet"].to(device)
+            temporal = batch.get("temporal_coords").to(device)
+            location = batch.get("location_coords").to(device)
             patch_ids = batch.get("filename")
-            
-            data, label = data.to(device), label.to(device)
-            temporal, location = temporal.to(device), location.to(device)
             
             if valid_mask(label).sum().item() == 0:
                 continue
@@ -502,75 +507,6 @@ def evaluate(logits, labels):
 
 model.eval()
 model_unet.eval()
-
-# all_logits_u = []
-# all_logits_p = []
-# all_labels   = []
-
-# with torch.no_grad():
-#     for batch in val_loader:
-#         data = batch["image"].to(device)
-#         label = batch["mask"].to(device)
-
-#         data_unet = batch["unet"].to(device)
-#         temporal = batch["temporal_coords"].to(device)
-#         location = batch["location_coords"].to(device)
-
-#         # UNet
-#         logits_u = model_unet(data_unet)
-
-#         # Prithvi
-#         output = model(data, temporal_coords=temporal, location_coords=location)
-#         features = output.output.unsqueeze(1)
-#         logits_p = model._to_ordinal_logits(features)
-
-#         all_logits_u.append(logits_u.cpu())
-#         all_logits_p.append(logits_p.cpu())
-#         all_labels.append(label.cpu())
-
-# all_logits_u = torch.cat(all_logits_u)
-# all_logits_p = torch.cat(all_logits_p)
-# all_labels   = torch.cat(all_labels)
-
-# best = {"w": None, "acc_exact": 0}
-
-# for w in torch.linspace(0, 1, steps=21):
-#     logits = w * all_logits_p + (1 - w) * all_logits_u
-
-#     acc_exact, acc_pm1 = evaluate(logits, all_labels)
-
-#     print(f"w={w:.2f} | exact={acc_exact:.4f} | pm1={acc_pm1:.4f}")
-
-#     if acc_exact > best["acc_exact"]:
-#         best = {"w": w.item(), "acc_exact": acc_exact}
-
-# print("BEST:", best)
-
-# val_loss, val_acc_pm1, val_acc_exact = evaluate_prithvi(model, val_loader, device)
-
-# print(f"val loss {val_loss:.4f} pm1 {val_acc_pm1:.4f} exact {val_acc_exact:.4f}")
-
-# generate_confusion_matrix(model, val_loader, device)
-
-# generate_submission(model, test_loader, device)
-
-def ordinal_predict_with_thresholds(logits, thresholds):
-    # logits: (N, 4, 128, 128)
-    # thresholds: (4,) -> reshape to (1, 4, 1, 1) for broadcast
-    thresh_tensor = torch.tensor(thresholds, dtype=logits.dtype, device=logits.device)
-    thresh_tensor = thresh_tensor.reshape(1, -1, 1, 1)
-    return (logits > thresh_tensor).sum(dim=1)  # (N, 128, 128)
-
-def accuracy_pm1_with_thresholds(logits, targets, thresholds):
-    preds = ordinal_predict_with_thresholds(logits, thresholds) # (N, 128, 128)
-    mask = valid_mask(targets)                                  # (N, 128, 128)
-    correct = ((torch.abs(preds - targets) <= 1) & mask)
-    return (correct.sum() / mask.sum()).item()
-
-def ordinal_predict_exact(logits, thresholds):
-    thresh_tensor = torch.tensor(thresholds, dtype=logits.dtype, device=logits.device)
-    thresh_tensor = thresh_tensor.reshape(1, -1, 1, 1)
-    return (logits > thresh_tensor).sum(dim=1)
 
 # tried w = 0.35, 0.1, 0.4
 # other things tried: TTA, tuning thresholds
