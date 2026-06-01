@@ -14,7 +14,7 @@ from agripotential.dataset import PotentialDataset, download_dataset
 
 # ---------------------------------------------------------------------------
 LABEL = "viticulture"   # one of: viticulture, market, field
-SPLIT = "train"        # one of: train, val, test
+SPLIT = "train"         # one of: train, val, test
 CHUNK_SIZE = 256
 DOWNLOAD_DATASET = False
 DOWNLOAD_IMAGES = False

@@ -1,32 +1,12 @@
 import torch
 import torch.nn as nn
-import math
-from tqdm import tqdm
-import sys
 import os
 import torch
-import copy
-from torch.utils.data import Dataset, Sampler, DataLoader
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
-import math
-import torch.nn as nn
 import torch.nn.functional as F
-import random
-import threading
-import time
-from collections import defaultdict
-from collections import OrderedDict
 import json
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
 import matplotlib.pyplot as plt
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import zipfile
-from PIL import Image
-import argparse
 
 import tempfile
 tempfile.tempdir = os.path.expandvars("$HOME/scratch/tmp/")
@@ -40,7 +20,6 @@ def label_to_ordinal(targets, num_classes=5):
     # returns: (N, 4) binary vectors
     thresholds = torch.arange(1, num_classes, device=targets.device)  # [1,2,3,4]
     return (targets.unsqueeze(1) > thresholds).float()
-
 
 def loss_fn(logits, targets):
     B, C, H, W = logits.shape
@@ -345,7 +324,7 @@ def visualize_failures(model, val_loader, device, output_dir, n_samples=10):
 
                 diff = np.abs(pred - target)
 
-                # --- Masked arrays (KEY FIX) ---
+                # --- Masked arrays ---
                 pred_masked   = np.ma.masked_where(~mask, pred)
                 diff_masked   = np.ma.masked_where(~mask, diff)
 
@@ -382,33 +361,6 @@ def visualize_failures(model, val_loader, device, output_dir, n_samples=10):
 
                 count += 1
 
-def plot_loss_curve(train_losses, val_losses, save_path):
-    plt.figure(figsize=(10, 5))
-    
-    plt.subplot(1, 2, 1)
-    plt.plot(train_losses, label='train loss')
-    plt.plot(val_losses,   label='val loss')
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.title('Loss')
-    plt.legend()
-    plt.grid(True)
-    
-    plt.subplot(1, 2, 2)
-    plt.plot(train_losses, label='train loss')
-    plt.plot(val_losses,   label='val loss')
-    plt.xlabel('epoch')
-    plt.ylabel('loss (log scale)')
-    plt.title('Loss (log scale)')
-    plt.yscale('log')
-    plt.legend()
-    plt.grid(True)
-    
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150)
-    plt.close()
-    print(f"Saved loss curve to {save_path}")
-    
 if __name__ == "__main__":
     model_name = "unet_a0"
 

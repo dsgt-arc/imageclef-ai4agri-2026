@@ -1,11 +1,7 @@
-# %%
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-
-
-# %%
 import os
 import numpy as np
 import json
@@ -16,15 +12,11 @@ import zipfile
 from PIL import Image
 import random
 
-
-# %%
 from utils import ordinal_predict, accuracy_exact, accuracy_pm1, valid_mask, ordinal_loss, evaluate, plot_loss_curve
 
-# %%
 REFLECTANCE_SCALE = 10_000.0
 CHUNKS_DIR = os.path.expandvars("$HOME/scratch/precomputed_tensors_2/")
 
-# %%
 class ChunkedDataset(Dataset):
     def __init__(self, mode, add_indices=True, cache_size=8):
         self.mode = mode
@@ -133,15 +125,10 @@ class ChunkedDataset(Dataset):
 
         return data, label, patch_id
 
-
-# %%
-# Check PyTorch and device
 print(f"PyTorch version: {torch.__version__}")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device}")
 
-
-# %%
 train_dataset = ChunkedDataset("train", cache_size=6)
 val_dataset   = ChunkedDataset("val",   cache_size=2)
 
@@ -163,7 +150,6 @@ train_loader = DataLoader(
     shuffle=False,
 )
 
-# %%
 def generate_confusion_matrix(model, val_loader, device):
     all_preds, all_labels = [], []
 
@@ -202,8 +188,6 @@ def generate_confusion_matrix(model, val_loader, device):
     plt.savefig(f'confusion_matrix.png')
     plt.close()
 
-
-# %%
 test_dataset = ChunkedDataset("test", cache_size=2)
 test_loader = DataLoader(
     test_dataset,
@@ -212,8 +196,6 @@ test_loader = DataLoader(
     num_workers=0
 )
 
-
-# %%
 def generate_submission(model, test_loader, device):
     output_dir = "submissions"
     count = 0
@@ -250,8 +232,6 @@ def generate_submission(model, test_loader, device):
 
     print(f"Saved {count} predictions → {zip_path}")
 
-
-# %%
 class ResBlock(nn.Module):
     def __init__(self, in_ch, out_ch, dropout=0.2):
         super().__init__()
@@ -280,8 +260,6 @@ class ResBlock(nn.Module):
 
         return out
 
-
-# %%
 class ResUNetOrdinal(nn.Module):
     """
     Baseline UNet: flatten all timesteps into channels.
@@ -292,14 +270,14 @@ class ResUNetOrdinal(nn.Module):
     """
     def __init__(
         self,
-        in_channels  = 13,
+        in_channels  = 15,
         num_timesteps= 34,
         num_classes  = 4,
         base_dim     = 64,
         dropout      = 0.2,
     ):
         super().__init__()
-        flat_channels = in_channels * num_timesteps  # 13*34 = 442
+        flat_channels = in_channels * num_timesteps  # 15*34 = 510
 
         # -------- Encoder (3 levels) --------
         self.enc1 = ResBlock(flat_channels, base_dim, dropout)
@@ -356,8 +334,6 @@ class ResUNetOrdinal(nn.Module):
 
         return logits
 
-
-# %%
 epochs = 100
 
 model = ResUNetOrdinal(
@@ -380,7 +356,6 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     eta_min= 1e-7,
 )
 
-# %%
 train_losses = []
 val_losses = []
 
@@ -493,7 +468,6 @@ for epoch in range(epochs):
 # final plot
 plot_loss_curve(train_losses, val_losses, f'loss_curve.png')
 
-# %%
 model.eval()
 
 val_loss, val_acc_pm1, val_acc_exact = evaluate(model, val_loader, device)

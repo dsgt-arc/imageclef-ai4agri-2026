@@ -1,11 +1,8 @@
-# %%
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-
-# %%
 import os
 import numpy as np
 import json
@@ -15,18 +12,15 @@ import matplotlib.pyplot as plt
 import zipfile
 from PIL import Image
 import random
-from tqdm import tqdm
 from datetime import datetime
+from collections import defaultdict
+import random
 
-
-# %%
 import terratorch
 from terratorch.tasks import SemanticSegmentationTask
 
-# %%
 from utils import ordinal_predict, accuracy_exact, accuracy_pm1, valid_mask, ordinal_loss, evaluate, plot_loss_curve, ordinal_confidence, label_to_ordinal
 
-# %%
 REFLECTANCE_SCALE = 10_000.0
 CHUNKS_DIR = os.path.expandvars("$HOME/scratch/precomputed_tensors_2/")
 CHECKPOINTS_DIR = os.path.expandvars("$HOME/scratch/checkpoints/")
@@ -47,7 +41,6 @@ PRITHVI_BAND_INDICES = [0, 1, 2, 7, 8, 9]
 MEANS = torch.tensor([494.905781, 815.239594, 924.335066, 2968.881459, 2634.621962, 1739.579917])
 STDS  = torch.tensor([284.925432, 357.84876,  575.566823, 896.601013,  951.900334,  921.407808])
 
-# %%
 def aggregate_seasons(data):
     # data: [T, C, H, W]
     data = data[:, PRITHVI_BAND_INDICES].float()  # [T, 6, H, W]
@@ -73,10 +66,6 @@ FIXED_TEMPORAL_COORDS = torch.tensor([
     [2018, date_to_doy(26, 8, 2018)],   # Summer
     [2018, date_to_doy(20, 9, 2018)],   # Autumn
 ], dtype=torch.float32)  # [4, 2]
-
-# %%
-from collections import defaultdict
-import random
 
 class ChunkedDataset(Dataset):
     def __init__(self, mode, cache_size=8):
@@ -239,54 +228,6 @@ class OrdinalSegmentationTask(SemanticSegmentationTask):
 
     def _compute_loss(self, logits, y):
         return ordinal_loss(logits, y)
-        
-def generate_confusion_matrix(model, val_loader, device):
-    all_preds, all_labels = [], []
-
-    with torch.no_grad():
-        for batch in val_loader:
-            data = batch["image"]
-            label = batch["mask"]
-            data_unet = batch["unet"]
-            temporal = batch.get("temporal_coords")
-            location = batch.get("location_coords")
-            patch_ids = batch.get("filename")
-
-            data, label = data.to(device), label.to(device)
-            temporal, location = temporal.to(device), location.to(device)
-
-            output = model(data, temporal_coords=temporal, location_coords=location)
-            features = output.output.unsqueeze(1) # [B,1,H,W] because by default model does mask = self._check_for_single_channel_and_squeeze(mask)
-            logits = model._to_ordinal_logits(features)
-            
-            preds = ordinal_predict(logits)
-            mask = label != -1
-
-            labels = label[mask]
-            preds  = preds[mask]
-
-            # collect for confusion matrix
-            all_preds.append(preds.cpu())
-            all_labels.append(labels.cpu())
-
-    print("Unique preds:", torch.unique(torch.cat(all_preds)))
-    print("Unique labels:", torch.unique(torch.cat(all_labels)))
-
-    all_preds  = torch.cat(all_preds).numpy()
-    all_labels = torch.cat(all_labels).numpy()
-
-    cm = confusion_matrix(all_labels, all_preds, labels=[0,1,2,3,4])
-
-    plt.figure(figsize=(6,5))
-    sns.heatmap(cm, annot=True, fmt='d', 
-                xticklabels=[0,1,2,3,4], 
-                yticklabels=[0,1,2,3,4],
-                cmap='Blues')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title('Confusion Matrix')
-    plt.savefig(f'confusion_matrix.png')
-    plt.close()
   
 def evaluate_unet(model, loader, device):
     total_loss = 0
@@ -355,10 +296,8 @@ def evaluate_prithvi(model, loader, device):
         for batch in loader:
             data = batch["image"].to(device)
             label = batch["mask"].to(device)
-            data_unet = batch["unet"].to(device)
             temporal = batch.get("temporal_coords").to(device)
             location = batch.get("location_coords").to(device)
-            patch_ids = batch.get("filename")
             
             if valid_mask(label).sum().item() == 0:
                 continue
@@ -424,13 +363,11 @@ def generate_submission_ensemble(model_unet, model_prithvi, test_loader, device,
 
     print(f"Saved {count} predictions → {zip_path}")
 
-# %%
 # Check PyTorch and device
 print(f"PyTorch version: {torch.__version__}")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device}")
 
-# %%
 #### Unet
 from unet import ResUNetOrdinal
 
@@ -444,7 +381,6 @@ model_unet = ResUNetOrdinal(
 
 model_unet.load_state_dict(torch.load('final_best_model-v2.pt', map_location=device))
 
-# %%
 #### Prithvi
 
 from terratorch.models import EncoderDecoderFactory

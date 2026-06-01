@@ -48,9 +48,9 @@ class ResUNetOrdinal(nn.Module):
         dropout      = 0.2,
     ):
         super().__init__()
-        flat_channels = in_channels * num_timesteps  # 13*34 = 442
+        flat_channels = in_channels * num_timesteps  # 15*34 = 510
 
-        # -------- Encoder (3 levels) --------
+        # -------- Encoder --------
         self.enc1 = ResBlock(flat_channels, base_dim, dropout)
         self.enc2 = ResBlock(base_dim, base_dim * 2, dropout)
         self.enc3 = ResBlock(base_dim * 2, base_dim * 4, dropout)
@@ -95,7 +95,7 @@ class ResUNetOrdinal(nn.Module):
         d2 = self.dec2(torch.cat([self.up2(d3), e2], dim=1))
         d1 = self.dec1(torch.cat([self.up1(d2), e1], dim=1))
 
-        # -------- CORAL Head --------
+        # -------- Ordinal Head --------
         features = self.head(d1)  # [B,1,H,W]
 
         thresholds = torch.cumsum(F.softplus(self.raw_bias), dim=0)

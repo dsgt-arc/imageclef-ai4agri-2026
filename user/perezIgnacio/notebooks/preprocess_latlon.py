@@ -9,29 +9,14 @@ import requests
 import torch
 from tqdm import tqdm
 import agripotential
-
 from agripotential.dataset import PotentialDataset, download_dataset
-
-# --------------------------------------------------------------------------
 import rasterio
 from rasterio.transform import xy
 from pyproj import Transformer
 
-def get_patch_latlon(row, col, patch_size, tif_path):
-    with rasterio.open(tif_path) as src:
-        # center pixel of patch
-        center_row = row + patch_size // 2
-        center_col = col + patch_size // 2
-        # UTM coords
-        x, y = xy(src.transform, center_row, center_col)
-        # convert to lat/lon
-        transformer = Transformer.from_crs(src.crs, "EPSG:4326", always_xy=True)
-        lon, lat = transformer.transform(x, y)
-    return lat, lon
-
 # ---------------------------------------------------------------------------
 LABEL = "viticulture"   # one of: viticulture, market, field
-SPLIT = "test"        # one of: train, val, test
+SPLIT = "test"          # one of: train, val, test
 CHUNK_SIZE = 64
 DOWNLOAD_DATASET = False
 DOWNLOAD_IMAGES = False
@@ -47,7 +32,7 @@ if not os.path.isdir(SAVE_DIR):
 
 def download_file(src_url: str, dest_path: str):
     with requests.get(src_url, stream=True) as response:
-        response.raise_for_status()  # Raise exception for HTTP errors
+        response.raise_for_status()
         with open(dest_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1 MB chunks
                 if chunk:

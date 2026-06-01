@@ -4,25 +4,21 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-# %%
 import os
 import numpy as np
 import json
 import random
-from tqdm import tqdm
 from datetime import datetime
+from collections import defaultdict
+import random
 
-# %%
 import terratorch
 from terratorch.tasks import SemanticSegmentationTask
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
 
-# %%
 from utils import ordinal_predict, accuracy_exact, accuracy_pm1, valid_mask, ordinal_loss, evaluate, plot_loss_curve, ordinal_confidence, label_to_ordinal
 
-
-# %%
 REFLECTANCE_SCALE = 10_000.0
 CHUNKS_DIR = os.path.expandvars("$HOME/scratch/precomputed_tensors_2/")
 CHECKPOINTS_DIR = os.path.expandvars("$HOME/scratch/checkpoints/")
@@ -43,8 +39,6 @@ PRITHVI_BAND_INDICES = [0, 1, 2, 7, 8, 9]
 MEANS = torch.tensor([494.905781, 815.239594, 924.335066, 2968.881459, 2634.621962, 1739.579917])
 STDS  = torch.tensor([284.925432, 357.84876,  575.566823, 896.601013,  951.900334,  921.407808])
 
-
-# %%
 def aggregate_seasons(data):
     # data: [T, C, H, W]
     data = data[:, PRITHVI_BAND_INDICES].float()  # [T, 6, H, W]
@@ -70,12 +64,6 @@ FIXED_TEMPORAL_COORDS = torch.tensor([
     [2018, date_to_doy(26, 8, 2018)],   # Summer
     [2018, date_to_doy(20, 9, 2018)],   # Autumn
 ], dtype=torch.float32)  # [4, 2]
-
-        
-
-# %%
-from collections import defaultdict
-import random
 
 class ChunkedDataset(Dataset):
     def __init__(self, mode, cache_size=8):
@@ -220,8 +208,6 @@ class ChunkedDataset(Dataset):
             "location_coords": latlon,
         }
 
-
-# %%
 class ShuffleDatasetCallback(Callback):
     def on_train_epoch_start(self, trainer, pl_module):
         trainer.train_dataloader.dataset.shuffle()
@@ -305,8 +291,6 @@ class MetricsCallback(Callback):
         plt.savefig(self.save_path, dpi=150)
         plt.close()
 
-
-# %%
 class OrdinalSegmentationTask(SemanticSegmentationTask):
     def __init__(self, epochs=40, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -462,14 +446,11 @@ class OrdinalSegmentationTask(SemanticSegmentationTask):
         self.log("val/acc_pm1",   acc_pm1,   prog_bar=True,  sync_dist=True, on_epoch=True, on_step=False, batch_size=x.shape[0])
         self.log("val/acc_exact", acc_exact, prog_bar=True,  sync_dist=True, on_epoch=True, on_step=False, batch_size=x.shape[0])
 
-
-# %%
 # Check PyTorch and device
 print(f"PyTorch version: {torch.__version__}")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device}")
 
-# %%
 #### Unet
 from unet import ResUNetOrdinal
 
@@ -483,7 +464,6 @@ model_unet = ResUNetOrdinal(
 
 model_unet.load_state_dict(torch.load('best_unet.pt', map_location=device))
 
-# %%
 #### Prithvi
 
 from terratorch.models import EncoderDecoderFactory
@@ -578,7 +558,6 @@ trainer = pl.Trainer(
     num_sanity_val_steps=0
 )
 
-# %%
 # ── dataloaders ────────────────────────────────────────────────────────────
 train_dataset = ChunkedDataset(mode="train", cache_size=4)
 val_dataset   = ChunkedDataset(mode="val", cache_size=2)
@@ -592,5 +571,4 @@ val_loader = DataLoader(
     val_dataset, batch_size=32, shuffle=False
 )
 
-# %%
 trainer.fit(model, train_loader, val_loader)
