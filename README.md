@@ -1,144 +1,63 @@
-# CLEF Project Template
+# Predicting Viticulture Potential through an Ensemble of U-Net and a Geospatial Foundation Model
 
-Template repository for DS@GT ARC teams working on CLEF competitions. Fork this repo to get started with structured experiment tracking, agent skills, slash commands, OpenSpec spec-driven development, and PACE cluster tooling.
+Determining agricultural potential is fundamental to sustainable land management and agricultural planning. Remote sensing data is increasingly valuable as an avenue for agricultural potential due to the cost of traditional methods (surveys, in-situ measurements, soil testing, etc).
 
-## Quick Start
+ImageCLEF AI4Agri 2026: Subtask 1 is concerned with the prediction of viticulture potential in Southern France. This repository contains the implementation and experiment code for Georgia Tech's DS@GT ARC submission, which introduces an ensemble of U-Net and a Geospatial Foundation Model (Prithvi-2.0). Full methodology and analysis are available in the [working notes](https://arxiv.org/abs/2607.08449).
 
-| Resource | Link |
-|----------|------|
-| Research concepts | [docs/concepts/](docs/concepts/) |
-| Literature references | [docs/references/](docs/references/) |
-| Vendor documentation | [docs/vendor/](docs/vendor/) |
-| Guides | [docs/guides/](docs/guides/) |
+Trained checkpoints for the submission are available on Hugging Face at https://huggingface.co/PerezIgnacio/dsgt-arc-imageclef-ai4agri-2026.
 
-## Guides
+## Project structure
 
-- [Getting Started](docs/guides/getting-started.md) - Fork, setup, first experiment
-- [Agent Tooling](docs/guides/agent-tooling.md) - Skills, slash commands, and OpenSpec explained
-- [Claude Commands](docs/guides/claude-commands.md) - Slash command reference
-- [OpenSpec](docs/guides/openspec.md) - Spec-driven development workflow
-- [PACE Setup](docs/guides/pace-setup.md) - PACE cluster environment setup
-
-## Repository Structure
-
-```
-clef-project-template/
-├── skills/                     # Agent Skills (auto-discovered by compatible agents)
-│   ├── pace-cluster/           # PACE Phoenix cluster operations
-│   ├── experiment/             # Experiment lifecycle management
-│   └── research-docs/          # Research documentation workflow
-├── .claude/                    # Claude Code config & slash commands
-│   ├── settings.json
-│   └── commands/
-│       ├── docs/               # /docs:concept, /docs:reference, /docs:vendor
-│       ├── experiment/         # /experiment:proposal, /experiment:result, /experiment:validate
-│       └── openspec/           # OPSX commands (empty until you run `openspec init`)
-├── docs/
-│   ├── README.md               # Documentation index
-│   ├── guides/                 # How-to documentation
-│   ├── _templates/             # Document templates (don't modify)
-│   ├── concepts/               # Research ideas
-│   ├── references/             # Papers and AI research outputs
-│   └── vendor/                 # External tool documentation
-├── openspec/
-│   ├── config.yaml             # Project context and schema (fill in after forking)
-│   ├── specs/                  # Built specifications
-│   └── changes/                # Change proposals
-├── user/
-│   └── example/                # Example user workspace
-│       └── experiments/
-│           └── 000-template/   # Template experiment
-│               └── pyproject.toml  # Experiment-level dependencies
-├── vendor/                     # Vendored submodules / external repos
-├── pyproject.toml              # Workspace root (discovers experiments)
-├── AGENTS.md                   # AI assistant guidelines
-├── CLAUDE.md                   # Symlink → AGENTS.md
-├── ruff.toml                   # Ruff linter/formatter config
-├── .pre-commit-config.yaml     # Pre-commit hooks
-├── .gitignore
-└── LICENSE
+```text
+.
+├── ai4agri/               # Shared package and utilities
+├── notebooks/             # Exploratory notebooks
+├── scripts/               # Utility scripts for experiments
+├── src/                   # Final submission code and reusable source files
+│   ├── utils/             # Shared training/evaluation helpers
+│   ├── unet.py            # U-Net model definition
+│   ├── prithvi.py         # Prithvi-based training utilities
+│   ├── test.py            # Ensemble evaluation and submission generation
+│   ├── train-unet.py      # U-Net training
+│   ├── train-prithvi.py   # Prithvi training
+│   └── preprocessing.py   # Preprocessing
+├── skills/                # Agent skills used for experiment workflows
+├── user/                  # User-specific experiment workspaces
+│   ├── hkee7/
+│   ├── lrassbach3/
+|   └── perezIgnacio/
+├── pyproject.toml         # Workspace configuration
+├── AGENTS.md              # Repository conventions
+└── README.md              # Project overview
 ```
 
-## Setup
+## Setup and usage
 
-### 1. Fork and Rename
-
-Fork this repository and update the placeholders:
-
-- `ruff.toml`: Change `known-first-party` to your package name
-- `openspec/config.yaml`: Fill in your project context and tech stack
-- This `README.md`: Update title and description
-
-### 2. Install uv
+### 1. Install uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 3. Create Your User Workspace
+### 2. Create a virtual environment
 
 ```bash
-cp -r user/example user/<your-name>
+uv venv .venv
+source .venv/bin/activate
 ```
 
-Edit the `pyproject.toml` inside your first experiment (e.g., `user/<your-name>/experiments/001-my-experiment/pyproject.toml`) with your name and dependencies, then:
+### 3. Install dependencies for an experiment
 
 ```bash
-# Create virtual environment
-uv venv .venv
-
-# Activate it
-source .venv/bin/activate
-
-# Install experiment dependencies
 uv sync --package <experiment-name>
 ```
 
-### 4. Install Pre-commit Hooks
+### 4. Run an experiment
 
-```bash
-pre-commit install
-```
+Navigate to the relevant experiment directory under [user](user) and follow the instructions in that workspace. Most experiments are organized as self-contained directories with their own configuration and scripts.
 
-## Agent Tooling
+## Agent skills
 
-This template uses three systems for AI-assisted workflows. See [Agent Tooling Guide](docs/guides/agent-tooling.md) for full details.
+The repository keeps the relevant agent skills for experiment-oriented workflows:
 
-### Skills (Auto-Activated)
-
-[Agent Skills](https://agentskills.io) are auto-discovered by compatible agents (Claude Code, Cursor, Gemini CLI, etc.). Just describe what you need and the agent loads the right skill.
-
-| Skill | Activates when you... |
-|-------|----------------------|
-| `pace-cluster` | Ask about PACE, Slurm, GPUs, job scripts |
-| `experiment` | Want to create, run, or document experiments |
-| `research-docs` | Want to capture concepts, papers, or tools |
-
-### Slash Commands (User-Invoked)
-
-Claude Code-specific shortcuts for explicit workflow triggers:
-
-| Command | Purpose |
-|---------|---------|
-| `/docs:concept` | Create a research concept document |
-| `/docs:reference` | Capture knowledge from papers/articles |
-| `/docs:vendor` | Document an external tool or dataset |
-| `/experiment:proposal` | Propose a new experiment |
-| `/experiment:result` | Record experiment results |
-| `/experiment:validate` | Validate experiment structure |
-| `/opsx:explore` | Investigate ideas before committing to a change |
-| `/opsx:new` | Create a new change proposal |
-| `/opsx:ff` | Fast-forward all planning artifacts |
-| `/opsx:apply` | Implement an approved change |
-| `/opsx:archive` | Archive a completed change |
-
-### OpenSpec (Change Management)
-
-Spec-driven development using the [OPSX workflow](https://github.com/Fission-AI/OpenSpec). Run `openspec init` after forking to generate skills and commands. See [OpenSpec Guide](docs/guides/openspec.md).
-
-## Contributing
-
-1. Create your user workspace under `user/<your-name>/`
-2. Use slash commands to create structured documents
-3. Follow the research workflow: Reference → Concept → Experiment → Results
-4. See [AGENTS.md](AGENTS.md) for AI assistant conventions
+- `experiment` — create and document experiments

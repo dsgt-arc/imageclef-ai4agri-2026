@@ -7,7 +7,7 @@
 # directory and run `uv sync` directly.
 
 [project]
-name = "clef-project-template"
+name = "imageclef-ai4agri-2026"
 version = "0.1.0"
 requires-python = ">=3.10"
 

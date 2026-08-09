@@ -1,0 +1,21 @@
+# Runtime dependencies for the submission source code under src/
+# Install with: pip install -r src/requirements.txt
+
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+tqdm
+requests
+pillow
+pyproj
+rasterio
+
+# Deep learning / training stack
+torch
+lightning
+terratorch
+
+# Dataset / geospatial helpers
+agripotential
