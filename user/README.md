@@ -1,11 +1,3 @@
-# Example User Workspace
-
-This is a template user workspace. Copy this directory to create your own:
-
-```bash
-cp -r user/example user/<your-name>
-```
-
 ## What User Workspaces Are For
 
 Each team member gets their own workspace under `user/<name>/`. This is where you:
